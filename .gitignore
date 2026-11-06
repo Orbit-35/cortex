@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Personal data: never public
+cortex.db
+cortex.db-*
+*.db
+*.sqlite
+*.sqlite3
+raw/
+exports/
+data/
+backups/
+*.zip
+*.csv
+
+# Secrets
+.env
+.env.*
+*.key
+*.pem
+
+# Claude Code personal overrides
+.claude/settings.local.json
+CLAUDE.local.md
