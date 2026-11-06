@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<title>Cortex · Lifting</title>
+<style>
+  :root {
+    --bg: #111418; --card: #1b2027; --line: #2a313b; --text: #e8ecf1;
+    --muted: #8b95a3; --accent: #4f9cff; --danger: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 17px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+    max-width: 520px; margin-inline: auto;
+  }
+  h1 { font-size: 20px; margin: 4px 0 16px; color: var(--muted); font-weight: 600; }
+  label { display: block; font-size: 14px; color: var(--muted); margin: 14px 0 6px; }
+  input {
+    width: 100%; font: inherit; font-size: 20px; color: var(--text);
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px; min-height: 56px;
+  }
+  input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 8px 0 2px; }
+  .chip {
+    flex: none; font: inherit; font-size: 15px; color: var(--text);
+    background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+    padding: 10px 14px; min-height: 44px;
+  }
+  .chip.on { border-color: var(--accent); color: var(--accent); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .stepper { display: grid; grid-template-columns: 56px 1fr 56px; gap: 6px; }
+  .stepper input { text-align: center; padding: 14px 4px; }
+  .step {
+    font: inherit; font-size: 24px; color: var(--text); background: var(--card);
+    border: 1px solid var(--line); border-radius: 12px; min-height: 56px;
+  }
+  .log {
+    width: 100%; margin-top: 20px; min-height: 64px; border: 0; border-radius: 14px;
+    background: var(--accent); color: #fff; font: inherit; font-size: 20px; font-weight: 700;
+  }
+  .log:active, .step:active, .chip:active { transform: scale(.98); }
+  .msg { min-height: 22px; font-size: 14px; color: var(--muted); margin-top: 8px; text-align: center; }
+  h2 { font-size: 15px; color: var(--muted); margin: 28px 0 8px; font-weight: 600; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li {
+    display: flex; align-items: center; gap: 12px; padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  li .main { flex: 1; min-width: 0; }
+  li .ex { font-weight: 600; }
+  li .meta { font-size: 13px; color: var(--muted); }
+  li .num { font-variant-numeric: tabular-nums; font-size: 18px; }
+  .del {
+    background: none; border: 0; color: var(--muted); font-size: 22px;
+    width: 44px; height: 44px; border-radius: 10px;
+  }
+  .del:active { color: var(--danger); }
+</style>
+</head>
+<body>
+<h1>Lifting</h1>
+
+<form id="form" autocomplete="off">
+  <label for="exercise">Exercise</label>
+  <input id="exercise" list="exlist" placeholder="e.g. Bench Press" required enterkeyhint="next">
+  <datalist id="exlist"></datalist>
+  <div class="chips" id="chips"></div>
+
+  <div class="row">
+    <div>
+      <label for="weight">Weight (kg)</label>
+      <div class="stepper">
+        <button type="button" class="step" data-t="weight" data-d="-2.5">−</button>
+        <input id="weight" type="number" inputmode="decimal" step="0.5" min="0" required>
+        <button type="button" class="step" data-t="weight" data-d="2.5">+</button>
+      </div>
+    </div>
+    <div>
+      <label for="reps">Reps</label>
+      <div class="stepper">
+        <button type="button" class="step" data-t="reps" data-d="-1">−</button>
+        <input id="reps" type="number" inputmode="numeric" step="1" min="1" required>
+        <button type="button" class="step" data-t="reps" data-d="1">+</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="log" type="submit">Log set</button>
+  <div class="msg" id="msg"></div>
+</form>
+
+<h2>Recent sets</h2>
+<ul id="recent"></ul>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const UNIT = "kg";
+
+// "Bench Press" <-> "bench_press": the metric stored in Cortex is a slug.
+const toMetric = (name) => name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+const toName = (metric) => metric.split("_").map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  return res.status === 204 ? null : res.json();
+}
+
+function isToday(iso) {
+  return new Date(iso).toDateString() === new Date().toDateString();
+}
+
+let recent = [];
+
+async function loadExercises() {
+  const metrics = await api("/api/metrics?module=lifting");
+  $("exlist").innerHTML = metrics.map(m => `<option value="${toName(m)}">`).join("");
+  const current = toMetric($("exercise").value);
+  $("chips").innerHTML = metrics.slice(0, 8).map(m =>
+    `<button type="button" class="chip${m === current ? " on" : ""}" data-m="${m}">${toName(m)}</button>`
+  ).join("");
+}
+
+async function loadRecent() {
+  recent = await api("/api/entries?module=lifting&limit=30");
+  $("recent").innerHTML = recent.map(e => {
+    const t = new Date(e.recorded_at);
+    const when = isToday(e.recorded_at)
+      ? t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+      : t.toLocaleDateString([], { month: "short", day: "numeric" });
+    const set = e.data.set ? ` · set ${e.data.set}` : "";
+    return `<li>
+      <div class="main"><div class="ex">${toName(e.metric)}</div><div class="meta">${when}${set}</div></div>
+      <div class="num">${e.value} ${e.unit ?? ""} × ${e.data.reps ?? "?"}</div>
+      <button class="del" data-id="${e.id}" aria-label="Delete set">×</button>
+    </li>`;
+  }).join("") || `<li class="meta">No sets yet.</li>`;
+}
+
+function prefillFrom(metric) {
+  // Pre-fill weight/reps from the last set of this exercise, so repeat sets are one tap.
+  const last = recent.find(e => e.metric === metric);
+  if (last) { $("weight").value = last.value; $("reps").value = last.data.reps ?? ""; }
+}
+
+$("chips").addEventListener("click", (ev) => {
+  const m = ev.target.dataset.m;
+  if (!m) return;
+  $("exercise").value = toName(m);
+  prefillFrom(m);
+  loadExercises();
+});
+
+$("exercise").addEventListener("change", () => prefillFrom(toMetric($("exercise").value)));
+
+document.querySelectorAll(".step").forEach(b => b.addEventListener("click", () => {
+  const input = $(b.dataset.t);
+  const next = (parseFloat(input.value) || 0) + parseFloat(b.dataset.d);
+  input.value = Math.max(0, Math.round(next * 2) / 2);
+}));
+
+$("form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const metric = toMetric($("exercise").value);
+  if (!metric) return;
+  const setNo = recent.filter(e => e.metric === metric && isToday(e.recorded_at)).length + 1;
+  try {
+    await api("/api/entries", {
+      method: "POST",
+      body: JSON.stringify({
+        module: "lifting", metric,
+        value: parseFloat($("weight").value), unit: UNIT,
+        data: { reps: parseInt($("reps").value, 10), set: setNo },
+      }),
+    });
+    $("msg").textContent = `Logged ${toName(metric)} set ${setNo} ✓`;
+    if (navigator.vibrate) navigator.vibrate(30);
+    await Promise.all([loadRecent(), loadExercises()]);
+  } catch (err) {
+    $("msg").textContent = "Couldn't save: " + err.message;
+  }
+});
+
+$("recent").addEventListener("click", async (ev) => {
+  const id = ev.target.dataset.id;
+  if (!id || !confirm("Delete this set?")) return;
+  await api(`/api/entries/${id}`, { method: "DELETE" });
+  await Promise.all([loadRecent(), loadExercises()]);
+});
+
+loadRecent().then(() => {
+  loadExercises();
+  if (recent[0]) { $("exercise").value = toName(recent[0].metric); prefillFrom(recent[0].metric); }
+});
+</script>
+</body>
+</html>
