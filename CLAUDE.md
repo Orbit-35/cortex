@@ -4,6 +4,9 @@ A personal software platform: one core (FastAPI + SQLite + login, later) with sm
 
 **This repo is public.** Never commit personal data (stats, exports, `cortex.db`), personal details about the owner, secrets, or API keys. Personal context lives outside the repo.
 
+## Design log
+`DESIGN.md` records every significant design choice with its justification and trade-offs, plus an overview of how the system fits together. **Whenever a change makes or alters a design decision, update `DESIGN.md` in the same commit** (add a numbered entry; mark replaced ones Superseded rather than deleting them).
+
 ## Long-term vision
 - Three shells, one codebase: standalone Android app (Capacitor), standalone Windows desktop app (Tauri), and a web app.
 - Shared across all three: data model, sync and offline storage (`static/core/`). Separate layouts per platform: phone = quick logging, desktop/web = Notion-style dashboards.
