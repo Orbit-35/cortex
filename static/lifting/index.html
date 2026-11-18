@@ -11,7 +11,8 @@
 <style>
   :root {
     --bg: #111418; --card: #1b2027; --line: #2a313b; --text: #e8ecf1;
-    --muted: #8b95a3; --accent: #4f9cff; --danger: #ff6b6b;
+    --muted: #8b95a3; --accent: #4f9cff; --danger: #ff6b6b; --good: #4cc38a;
+    --grid: #232a33;
   }
   * { box-sizing: border-box; }
   body {
@@ -20,12 +21,18 @@
     padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
     max-width: 520px; margin-inline: auto;
   }
-  header { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 16px; }
-  h1 { font-size: 20px; margin: 0; color: var(--muted); font-weight: 600; }
-  .sync { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 16px; }
+  .tabs { display: flex; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
+  .tab {
+    font: inherit; font-size: 16px; font-weight: 600; color: var(--muted); background: none;
+    border: 0; border-radius: 9px; padding: 8px 16px; min-height: 40px;
+  }
+  .tab[aria-selected="true"] { background: var(--line); color: var(--text); }
+  .sync { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
   .sync::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-  .sync.ok::before { background: #4cc38a; }
+  .sync.ok::before { background: var(--good); }
   .sync.pending::before { background: #f5a524; }
+  [hidden] { display: none !important; }
   label { display: block; font-size: 14px; color: var(--muted); margin: 14px 0 6px; }
   input {
     width: 100%; font: inherit; font-size: 20px; color: var(--text);
@@ -33,6 +40,7 @@
     padding: 14px; min-height: 56px;
   }
   input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  input[type="date"] { color-scheme: dark; font-size: 18px; }
   .chips { display: flex; gap: 8px; overflow-x: auto; padding: 8px 0 2px; }
   .chip {
     flex: none; font: inherit; font-size: 15px; color: var(--text);
@@ -47,12 +55,19 @@
     font: inherit; font-size: 24px; color: var(--text); background: var(--card);
     border: 1px solid var(--line); border-radius: 12px; min-height: 56px;
   }
+  .daterow { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  .daterow.past input { border-color: #f5a524; }
+  .today {
+    font: inherit; font-size: 15px; color: var(--text); background: var(--card);
+    border: 1px solid var(--line); border-radius: 12px; padding: 0 16px; min-height: 56px;
+  }
   .log {
     width: 100%; margin-top: 20px; min-height: 64px; border: 0; border-radius: 14px;
     background: var(--accent); color: #fff; font: inherit; font-size: 20px; font-weight: 700;
   }
-  .log:active, .step:active, .chip:active { transform: scale(.98); }
+  .log:active, .step:active, .chip:active, .today:active { transform: scale(.98); }
   .msg { min-height: 22px; font-size: 14px; color: var(--muted); margin-top: 8px; text-align: center; }
+  .msg.pr { color: var(--text); font-weight: 600; }
   h2 { font-size: 15px; color: var(--muted); margin: 28px 0 8px; font-weight: 600; }
   ul { list-style: none; margin: 0; padding: 0; }
   li {
@@ -68,50 +83,89 @@
     width: 44px; height: 44px; border-radius: 10px;
   }
   .del:active { color: var(--danger); }
+
+  /* Progress */
+  .hero { margin: 18px 0 4px; }
+  .hero .label { font-size: 14px; color: var(--muted); }
+  .hero .big { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .hero .big small { font-size: 20px; color: var(--muted); font-weight: 600; }
+  .hero .sub { font-size: 14px; color: var(--muted); }
+  .chart { position: relative; margin: 16px 0 0; touch-action: pan-y; user-select: none; }
+  .chart svg { display: block; width: 100%; height: 220px; overflow: visible; }
+  .chart text { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .tip {
+    position: absolute; top: 0; transform: translateX(-50%); pointer-events: none;
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 6px 10px; font-size: 13px; white-space: nowrap; color: var(--text);
+  }
+  .tip b { font-variant-numeric: tabular-nums; }
+  .tip span { color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  th { font-size: 13px; color: var(--muted); font-weight: 600; }
+  td.r, th.r { text-align: right; }
+  .empty { color: var(--muted); font-size: 15px; padding: 24px 0; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Lifting</h1>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-log" aria-controls="view-log">Log</button>
+    <button class="tab" role="tab" id="tab-progress" aria-controls="view-progress">Progress</button>
+  </div>
   <div class="sync" id="sync" role="status"></div>
 </header>
 
-<form id="form" autocomplete="off">
-  <label for="exercise">Exercise</label>
-  <input id="exercise" list="exlist" placeholder="e.g. Bench Press" required enterkeyhint="next">
-  <datalist id="exlist"></datalist>
-  <div class="chips" id="chips"></div>
+<main id="view-log" role="tabpanel" aria-labelledby="tab-log">
+  <form id="form" autocomplete="off">
+    <label for="exercise">Exercise</label>
+    <input id="exercise" list="exlist" placeholder="e.g. Bench Press" required enterkeyhint="next">
+    <datalist id="exlist"></datalist>
+    <div class="chips" id="chips"></div>
 
-  <div class="row">
-    <div>
-      <label for="weight">Weight (kg)</label>
-      <div class="stepper">
-        <button type="button" class="step" data-t="weight" data-d="-2.5">−</button>
-        <input id="weight" type="number" inputmode="decimal" step="0.5" min="0" required>
-        <button type="button" class="step" data-t="weight" data-d="2.5">+</button>
+    <div class="row">
+      <div>
+        <label for="weight">Weight (kg)</label>
+        <div class="stepper">
+          <button type="button" class="step" data-t="weight" data-d="-2.5" aria-label="Weight down 2.5">−</button>
+          <input id="weight" type="number" inputmode="decimal" step="0.5" min="0" required>
+          <button type="button" class="step" data-t="weight" data-d="2.5" aria-label="Weight up 2.5">+</button>
+        </div>
+      </div>
+      <div>
+        <label for="reps">Reps</label>
+        <div class="stepper">
+          <button type="button" class="step" data-t="reps" data-d="-1" aria-label="Reps down 1">−</button>
+          <input id="reps" type="number" inputmode="numeric" step="1" min="1" required>
+          <button type="button" class="step" data-t="reps" data-d="1" aria-label="Reps up 1">+</button>
+        </div>
       </div>
     </div>
-    <div>
-      <label for="reps">Reps</label>
-      <div class="stepper">
-        <button type="button" class="step" data-t="reps" data-d="-1">−</button>
-        <input id="reps" type="number" inputmode="numeric" step="1" min="1" required>
-        <button type="button" class="step" data-t="reps" data-d="1">+</button>
-      </div>
+
+    <label for="date">Date <span id="datehint"></span></label>
+    <div class="daterow" id="daterow">
+      <input id="date" type="date" required>
+      <button type="button" class="today" id="today" hidden>Today</button>
     </div>
-  </div>
 
-  <button class="log" type="submit">Log set</button>
-  <div class="msg" id="msg"></div>
-</form>
+    <button class="log" type="submit">Log set</button>
+    <div class="msg" id="msg" role="status"></div>
+  </form>
 
-<h2>Recent sets</h2>
-<ul id="recent"></ul>
+  <h2>Recent sets</h2>
+  <ul id="recent"></ul>
+</main>
+
+<main id="view-progress" role="tabpanel" aria-labelledby="tab-progress" hidden>
+  <div class="chips" id="pchips"></div>
+  <div id="pbody"></div>
+</main>
 
 <script type="module">
 // All data goes through the Cortex core: it saves to this device first and syncs
 // in the background, so this page works the same with or without a connection.
 import * as cortex from "/core/cortex.js";
+import { e1rm, dayKey, bestPerDay, personalRecords, prKind, fmtKg } from "/lifting/stats.js";
 
 const $ = (id) => document.getElementById(id);
 const UNIT = "kg";
@@ -120,15 +174,33 @@ const UNIT = "kg";
 const toMetric = (name) => name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 const toName = (metric) => metric.split("_").filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const todayKey = () => dayKey(new Date().toISOString());
+const fmtDay = (key, opts = { month: "short", day: "numeric" }) => {
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== new Date().getFullYear()) opts = { ...opts, year: "numeric" };
+  return date.toLocaleDateString([], opts);
+};
 
-function isToday(iso) {
-  return new Date(iso).toDateString() === new Date().toDateString();
+let all = [];          // every lifting entry on this device, newest first
+let progressMetric = null;
+
+// ---------- Tabs ----------
+
+function showTab(name) {
+  for (const t of ["log", "progress"]) {
+    $(`tab-${t}`).setAttribute("aria-selected", String(t === name));
+    $(`view-${t}`).hidden = t !== name;
+  }
+  if (name === "progress") renderProgress();
 }
+$("tab-log").addEventListener("click", () => { history.replaceState(null, "", "#log"); showTab("log"); });
+$("tab-progress").addEventListener("click", () => { history.replaceState(null, "", "#progress"); showTab("progress"); });
 
-let recent = [];
+// ---------- Log view ----------
 
-async function loadExercises() {
-  const metrics = await cortex.listMetrics("lifting");
+function renderExercises() {
+  const metrics = [...new Set(all.map((e) => e.metric))];
   $("exlist").innerHTML = metrics.map(m => `<option value="${esc(toName(m))}">`).join("");
   const current = toMetric($("exercise").value);
   $("chips").innerHTML = metrics.slice(0, 8).map(m =>
@@ -136,35 +208,45 @@ async function loadExercises() {
   ).join("");
 }
 
-async function loadRecent() {
-  recent = await cortex.listEntries({ module: "lifting", limit: 200 });
-  $("recent").innerHTML = recent.slice(0, 30).map(e => {
+function renderRecent() {
+  $("recent").innerHTML = all.slice(0, 30).map(e => {
     const t = new Date(e.recorded_at);
-    const when = isToday(e.recorded_at)
+    const when = dayKey(e.recorded_at) === todayKey()
       ? t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-      : t.toLocaleDateString([], { month: "short", day: "numeric" });
+      : fmtDay(dayKey(e.recorded_at));
     const set = e.data.set ? ` · set ${esc(e.data.set)}` : "";
     return `<li>
-      <div class="main"><div class="ex">${esc(toName(e.metric))}</div><div class="meta">${when}${set}</div></div>
+      <div class="main"><div class="ex">${esc(toName(e.metric))}</div><div class="meta">${esc(when)}${set}</div></div>
       <div class="num">${esc(e.value)} ${esc(e.unit ?? "")} × ${esc(e.data.reps ?? "?")}</div>
       <button class="del" data-id="${esc(e.client_id)}" aria-label="Delete set">×</button>
     </li>`;
   }).join("") || `<li class="meta">No sets yet.</li>`;
 }
 
-async function showSync() {
-  const { pending, online } = await cortex.getStatus();
-  const el = $("sync");
-  if (pending > 0) { el.textContent = `${pending} pending`; el.className = "sync pending"; }
-  else if (online) { el.textContent = "synced"; el.className = "sync ok"; }
-  else { el.textContent = online === false ? "offline" : ""; el.className = "sync"; }
+// The date field defaults to today. Picking an earlier day lets you enter old numbers
+// (PRs from before Cortex existed); it stays on that day so a whole session can be typed in.
+function renderDate() {
+  const past = $("date").value && $("date").value !== todayKey();
+  $("daterow").classList.toggle("past", past);
+  $("today").hidden = !past;
+  $("datehint").textContent = past ? "· entering a past session" : "";
 }
+$("date").max = todayKey();
+$("date").value = todayKey();
+$("date").addEventListener("change", renderDate);
+$("today").addEventListener("click", () => { $("date").value = todayKey(); renderDate(); });
 
-const refresh = () => Promise.all([loadRecent(), loadExercises(), showSync()]);
+// A past day is stored at noon local time: far enough from midnight that time zones
+// and daylight saving can't push it onto a neighbouring day.
+function recordedAtFor(key) {
+  if (key === todayKey()) return new Date().toISOString();
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d, 12).toISOString();
+}
 
 function prefillFrom(metric) {
   // Pre-fill weight/reps from the last set of this exercise, so repeat sets are one tap.
-  const last = recent.find(e => e.metric === metric);
+  const last = all.find(e => e.metric === metric);
   if (last) { $("weight").value = last.value; $("reps").value = last.data.reps ?? ""; }
 }
 
@@ -173,7 +255,7 @@ $("chips").addEventListener("click", (ev) => {
   if (!m) return;
   $("exercise").value = toName(m);
   prefillFrom(m);
-  loadExercises();
+  renderExercises();
 });
 
 $("exercise").addEventListener("change", () => prefillFrom(toMetric($("exercise").value)));
@@ -188,17 +270,31 @@ $("form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const metric = toMetric($("exercise").value);
   if (!metric) return;
-  const setNo = recent.filter(e => e.metric === metric && isToday(e.recorded_at)).length + 1;
+  const day = $("date").value || todayKey();
+  const previous = all.filter(e => e.metric === metric);
+  const setNo = previous.filter(e => dayKey(e.recorded_at) === day).length + 1;
+  const entry = {
+    module: "lifting", metric,
+    value: parseFloat($("weight").value), unit: UNIT,
+    data: { reps: parseInt($("reps").value, 10), set: setNo },
+    recorded_at: recordedAtFor(day),
+  };
   try {
-    await cortex.addEntry({
-      module: "lifting", metric,
-      value: parseFloat($("weight").value), unit: UNIT,
-      data: { reps: parseInt($("reps").value, 10), set: setNo },
-    });
-    $("msg").textContent = `Logged ${toName(metric)} set ${setNo} ✓`;
-    if (navigator.vibrate) navigator.vibrate(30);
+    // Only compare against sets from before this one, so backfilling old numbers
+    // doesn't announce a "PR" that was later beaten.
+    const before = previous.filter(e => e.recorded_at < entry.recorded_at);
+    const kind = prKind({ ...entry }, before);
+    await cortex.addEntry(entry);
+    const where = day === todayKey() ? "" : ` on ${fmtDay(day)}`;
+    let text = `Logged ${toName(metric)} set ${setNo}${where} ✓`;
+    if (kind === "e1rm") text = `🏆 New best: ~${fmtKg(e1rm(entry.value, entry.data.reps))} kg estimated 1RM`;
+    else if (kind === "reps") text = `🏆 Rep PR: heaviest ${entry.data.reps}-rep set yet`;
+    $("msg").textContent = text;
+    $("msg").classList.toggle("pr", !!kind);
+    if (navigator.vibrate) navigator.vibrate(kind ? [30, 60, 30] : 30);
   } catch (err) {
     $("msg").textContent = "Couldn't save: " + err.message;
+    $("msg").classList.remove("pr");
   }
 });
 
@@ -208,12 +304,148 @@ $("recent").addEventListener("click", async (ev) => {
   await cortex.deleteEntry(id);
 });
 
+// ---------- Progress view ----------
+
+function renderProgress() {
+  const metrics = [...new Set(all.map((e) => e.metric))];
+  if (!metrics.includes(progressMetric)) progressMetric = metrics[0] ?? null;
+  $("pchips").innerHTML = metrics.map(m =>
+    `<button type="button" class="chip${m === progressMetric ? " on" : ""}" data-m="${esc(m)}">${esc(toName(m))}</button>`
+  ).join("");
+  if (!progressMetric) {
+    $("pbody").innerHTML = `<p class="empty">Log a few sets and your progress shows up here.</p>`;
+    return;
+  }
+
+  const sets = all.filter(e => e.metric === progressMetric);
+  const days = bestPerDay(sets);
+  const { best, reps } = personalRecords(sets);
+  const since = days.length > 1 ? days[0] : null;
+  const change = since ? best.e1rm - since.e1rm : 0;
+
+  $("pbody").innerHTML = `
+    <div class="hero">
+      <div class="label">${esc(toName(progressMetric))} · best estimated 1RM</div>
+      <div class="big">${fmtKg(best.e1rm)} <small>kg</small></div>
+      <div class="sub">from ${fmtKg(best.weight)} × ${best.reps} on ${esc(fmtDay(dayKey(best.recorded_at)))}${
+        since && change > 0 ? ` · +${fmtKg(change)} kg since ${esc(fmtDay(since.day))}` : ""}</div>
+    </div>
+    <div class="chart" id="chart"></div>
+    <h2>Rep records</h2>
+    <table>
+      <thead><tr><th>Reps</th><th class="r">Heaviest</th><th class="r">Est. 1RM</th><th class="r">Date</th></tr></thead>
+      <tbody>${reps.map(r => `<tr>
+        <td>${r.reps}</td><td class="r">${fmtKg(r.weight)} kg</td>
+        <td class="r">${fmtKg(r.e1rm)}</td><td class="r">${esc(fmtDay(dayKey(r.recorded_at)))}</td>
+      </tr>`).join("")}</tbody>
+    </table>`;
+  drawChart($("chart"), days);
+}
+
+$("pchips").addEventListener("click", (ev) => {
+  const m = ev.target.dataset.m;
+  if (!m) return;
+  progressMetric = m;
+  renderProgress();
+});
+
+// Hand-drawn SVG line chart of best e1RM per training day. X is real time, so gaps
+// between sessions show as gaps. Tap or drag across it to read any day.
+function drawChart(el, days) {
+  if (days.length < 2) {
+    el.innerHTML = `<p class="empty">One session so far. Log another day to see a trend line.</p>`;
+    return;
+  }
+  const W = el.clientWidth || 340, H = 220;
+  const pad = { l: 36, r: 12, t: 40, b: 26 }; // top room is for the tooltip
+  const t = days.map(d => { const [y, m, dd] = d.day.split("-").map(Number); return new Date(y, m - 1, dd).getTime(); });
+  const v = days.map(d => d.e1rm);
+
+  // y: a "nice" step of 1, 2, 2.5 or 5 × 10^n giving about 4 gridlines.
+  let lo = Math.min(...v), hi = Math.max(...v);
+  if (hi - lo < 5) { lo -= 2.5; hi += 2.5; }
+  const raw = (hi - lo) / 4, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map(s => s * mag).find(s => s >= raw);
+  lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+
+  const x = (ms) => pad.l + (ms - t[0]) / (t.at(-1) - t[0]) * (W - pad.l - pad.r);
+  const y = (val) => pad.t + (hi - val) / (hi - lo) * (H - pad.t - pad.b);
+
+  const grid = [];
+  for (let g = lo; g <= hi + 1e-9; g += step) {
+    grid.push(`<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(g)}" y2="${y(g)}" stroke="var(--grid)" stroke-width="1"/>
+      <text x="${pad.l - 8}" y="${y(g) + 4}" text-anchor="end">${fmtKg(g)}</text>`);
+  }
+  const xLabels = [0, t.length - 1].map(i =>
+    `<text x="${x(t[i])}" y="${H - 6}" text-anchor="${i === 0 ? "start" : "end"}">${esc(fmtDay(days[i].day))}</text>`);
+  const path = t.map((ms, i) => `${i ? "L" : "M"}${x(ms).toFixed(1)},${y(v[i]).toFixed(1)}`).join("");
+  const dots = t.map((ms, i) =>
+    `<circle cx="${x(ms)}" cy="${y(v[i])}" r="4" fill="var(--accent)" stroke="var(--bg)" stroke-width="2"/>`).join("");
+
+  el.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Best estimated 1RM per session, ${esc(fmtDay(days[0].day))} to ${esc(fmtDay(days.at(-1).day))}">
+      ${grid.join("")}${xLabels.join("")}
+      <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <line id="cross" y1="${pad.t}" y2="${H - pad.b}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
+      ${dots}
+      <circle id="focus" r="6" fill="var(--accent)" stroke="var(--text)" stroke-width="2" visibility="hidden"/>
+    </svg>
+    <div class="tip" id="tip" hidden></div>`;
+
+  const svg = el.querySelector("svg"), cross = el.querySelector("#cross"),
+        focus = el.querySelector("#focus"), tip = el.querySelector("#tip");
+  const show = (clientX) => {
+    const r = svg.getBoundingClientRect();
+    const px = (clientX - r.left) * (W / r.width);
+    let i = 0;
+    for (let k = 1; k < t.length; k++) if (Math.abs(x(t[k]) - px) < Math.abs(x(t[i]) - px)) i = k;
+    const cx = x(t[i]), cy = y(v[i]);
+    cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("visibility", "visible");
+    focus.setAttribute("cx", cx); focus.setAttribute("cy", cy); focus.setAttribute("visibility", "visible");
+    const d = days[i];
+    tip.innerHTML = `<b>${fmtKg(d.e1rm)} kg</b> <span>· ${fmtKg(d.weight)}×${d.reps} · ${esc(fmtDay(d.day))}</span>`;
+    tip.hidden = false;
+    const left = cx * (r.width / W);
+    tip.style.left = `${Math.min(Math.max(left, tip.offsetWidth / 2), r.width - tip.offsetWidth / 2)}px`;
+  };
+  const hide = () => { cross.setAttribute("visibility", "hidden"); focus.setAttribute("visibility", "hidden"); tip.hidden = true; };
+  svg.addEventListener("pointerdown", (e) => show(e.clientX));
+  svg.addEventListener("pointermove", (e) => { if (e.pointerType === "mouse" || e.buttons) show(e.clientX); });
+  svg.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") hide(); });
+}
+
+let resizeTimer;
+addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (!$("view-progress").hidden) renderProgress(); }, 150);
+});
+
+// ---------- Wiring ----------
+
+async function showSync() {
+  const { pending, online } = await cortex.getStatus();
+  const el = $("sync");
+  if (pending > 0) { el.textContent = `${pending} pending`; el.className = "sync pending"; }
+  else if (online) { el.textContent = "synced"; el.className = "sync ok"; }
+  else { el.textContent = online === false ? "offline" : ""; el.className = "sync"; }
+}
+
+async function refresh() {
+  all = await cortex.listEntries({ module: "lifting", limit: Infinity });
+  renderRecent();
+  renderExercises();
+  if (!$("view-progress").hidden) renderProgress();
+  await showSync();
+}
+
 // Redraw whenever local data changes: after a log or delete, and after each sync
 // (which may bring in sets logged on another device).
 cortex.onChange(refresh);
 
+showTab(location.hash === "#progress" ? "progress" : "log");
+renderDate();
 refresh().then(() => {
-  if (recent[0]) { $("exercise").value = toName(recent[0].metric); prefillFrom(recent[0].metric); }
+  if (all[0]) { $("exercise").value = toName(all[0].metric); prefillFrom(all[0].metric); renderExercises(); }
   cortex.startAutoSync();
 });
 

@@ -109,6 +109,23 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Why:** nothing to install or compile; edit and reload. Fine at this size.
 - **Trade-off:** no components or type checking. Likely revisited when the desktop dashboards arrive.
 
+## Lifting
+
+### D18. Progress is measured by estimated 1RM (Epley), best set per day
+- **Decision:** each set gets `e1RM = weight × (1 + reps/30)` (a single counts as its weight). The chart plots each training day's best e1RM; a rep-records table lists the heaviest weight at each rep count.
+- **Why:** raw weight alone hides progress made in reps (80×8 after 80×5 is progress). e1RM puts every set on one scale, and "best per day" turns many sets into one honest point per session. Epley is the most common formula and fine in the 1-10 rep range.
+- **Trade-off:** it's an estimate, increasingly optimistic above ~12 reps. The rep-records table shows the real lifts alongside it.
+
+### D19. Charts are hand-written SVG, no chart library
+- **Decision:** `drawChart` in the lifting page builds the SVG directly. Maths lives in `static/lifting/stats.js` (pure functions, tested by `node tests/stats.test.mjs`).
+- **Why:** a CDN library would break offline use (D5) unless vendored and cached, and there's no build step (D15). One line chart is ~60 lines. Keeping the maths separate means the desktop dashboards can reuse it.
+- **Trade-off:** each new chart type is hand work. Revisit (vendor a library into `static/`) when dashboards need many chart types.
+
+### D20. Entering past numbers: a date field on the log form, stored at local noon
+- **Decision:** the log form has a date field defaulting to today. A past day is saved with `recorded_at` at 12:00 local time; the field stays on that day until "Today" is tapped, so a whole old session can be typed in a row. PR detection only compares against sets recorded before the new one.
+- **Why:** old PRs and history from before Cortex need a way in, and it's the same data as a normal set, so it uses the same form and the same `entries` rows (D1). Noon is as far from midnight as possible, so time-zone and daylight-saving shifts can't move it onto a neighbouring day.
+- **Trade-off:** backfilled sets have no real time of day. Bulk history from another app is better done with an importer (D2) than by typing.
+
 ## Security and hosting
 
 ### D16. No auth yet; tailnet only

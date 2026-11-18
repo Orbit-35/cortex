@@ -1,0 +1,33 @@
+// Run: node tests/stats.test.mjs
+import assert from "node:assert/strict";
+import { e1rm, bestPerDay, personalRecords, prKind, fmtKg, dayKey } from "../static/lifting/stats.js";
+
+const E = (w, r, t) => ({ value: w, data: { reps: r }, recorded_at: t });
+
+assert.equal(e1rm(100, 1), 100);
+assert.equal(e1rm(90, 10), 120);
+assert.equal(e1rm(0, 5), 0);
+assert.equal(e1rm(100, undefined), 0);
+
+const t = (d, h) => new Date(2026, 10, d, h).toISOString();
+const sets = [
+  E(60, 8, t(1, 10)), E(70, 5, t(1, 11)),   // day 1 best: 70x5 = 81.67
+  E(80, 3, t(3, 10)), E(75, 3, t(3, 11)),   // day 3 best: 80x3 = 88
+  E(85, 1, t(5, 10)),                         // day 5: 85
+];
+const days = bestPerDay(sets);
+assert.deepEqual(days.map((d) => d.day), [dayKey(t(1, 0)), dayKey(t(3, 0)), dayKey(t(5, 0))]);
+assert.deepEqual(days.map((d) => d.weight), [70, 80, 85]);
+
+const pr = personalRecords(sets);
+assert.equal(pr.best.weight, 80);                     // 88 > 85
+assert.deepEqual(pr.reps.map((r) => [r.reps, r.weight]), [[1, 85], [3, 80], [5, 70], [8, 60]]);
+
+assert.equal(prKind(E(90, 3, t(6, 10)), sets), "e1rm");
+assert.equal(prKind(E(65, 8, t(6, 10)), sets), "reps");     // heavier 8 than before, lower e1RM than 80x3
+assert.equal(prKind(E(70, 2, t(6, 10)), sets), "reps");     // first-ever double
+assert.equal(prKind(E(70, 5, t(6, 10)), sets), null);       // tie isn't a PR
+assert.equal(prKind(E(60, 5, t(6, 10)), []), null);         // first set ever isn't announced
+assert.equal(fmtKg(81.6667), "81.7");
+assert.equal(fmtKg(80), "80");
+console.log("stats.js: all tests passed");
