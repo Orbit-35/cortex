@@ -1,6 +1,6 @@
 // Run: node tests/stats.test.mjs
 import assert from "node:assert/strict";
-import { e1rm, bestPerDay, personalRecords, prKind, fmtKg, dayKey } from "../static/lifting/stats.js";
+import { e1rm, bestPerDay, personalRecords, prKind, dayKey } from "../static/lifting/stats.js";
 
 const E = (w, r, t) => ({ value: w, data: { reps: r }, recorded_at: t });
 
@@ -28,6 +28,9 @@ assert.equal(prKind(E(65, 8, t(6, 10)), sets), "reps");     // heavier 8 than be
 assert.equal(prKind(E(70, 2, t(6, 10)), sets), "reps");     // first-ever double
 assert.equal(prKind(E(70, 5, t(6, 10)), sets), null);       // tie isn't a PR
 assert.equal(prKind(E(60, 5, t(6, 10)), []), null);         // first set ever isn't announced
-assert.equal(fmtKg(81.6667), "81.7");
-assert.equal(fmtKg(80), "80");
+
+// Units: a 225 lb set and a 102.06 kg set are the same lift.
+const lb = { value: 225, unit: "lb", data: { reps: 1 }, recorded_at: t(7, 10) };
+assert.ok(Math.abs(e1rm(102.0583, 1) - personalRecords([lb]).best.e1rm) < 0.001);
+assert.equal(prKind({ value: 200, unit: "lb", data: { reps: 1 }, recorded_at: t(8, 10) }, sets), "e1rm"); // 90.7 kg > 88
 console.log("stats.js: all tests passed");

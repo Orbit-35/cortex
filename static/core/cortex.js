@@ -65,6 +65,8 @@ async function tx(stores, mode, fn) {
   });
 }
 
+export function newId() { return uuid(); }
+
 function uuid() {
   if (crypto.randomUUID) return crypto.randomUUID();
   // crypto.randomUUID needs HTTPS/localhost; plain http://<laptop-ip> lands here.
@@ -97,6 +99,29 @@ export function addEntry({ module, metric, value = null, unit = null, data = {},
     recorded_at: recorded_at || now, source: "manual", external_id: null,
     updated_at: now, deleted_at: null,
   });
+}
+
+// Save several entries (new or edited) in ONE transaction: all land or none do.
+// Each item is an entry's full state; pass an existing client_id to edit that entry,
+// and deleted_at to delete it. Used for saving a whole workout at once.
+export async function putEntries(list) {
+  const now = nowIso();
+  const rows = list.map((e) => ({
+    client_id: e.client_id || uuid(), module: e.module, metric: e.metric,
+    value: e.value ?? null, unit: e.unit ?? null, data: e.data ?? {},
+    recorded_at: e.recorded_at || now, source: e.source ?? "manual",
+    external_id: e.external_id ?? null, deleted_at: e.deleted_at ?? null, updated_at: now,
+  }));
+  if (!rows.length) return rows;
+  await tx(["entries", "outbox"], "readwrite", (t) => {
+    for (const r of rows) {
+      t.objectStore("entries").put(r);
+      t.objectStore("outbox").put(r);
+    }
+  });
+  changed();
+  if (autoSync) sync();
+  return rows;
 }
 
 // Soft delete: keep a "deleted" marker so the deletion itself can be synced.

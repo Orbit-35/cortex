@@ -1,5 +1,8 @@
 // Lifting maths: pure functions, no DOM, no storage. Pages (and later the desktop
-// dashboards) pass in entries and get numbers back, so this is easy to test and reuse.
+// dashboards) pass in set entries and get numbers back, so this is easy to test and reuse.
+// All weights coming out of here are in kg (sets may be stored in lb or kg); convert
+// for display with units.js.
+import { toKg } from "./units.js";
 
 // Estimated one-rep max (Epley): weight × (1 + reps/30). A single is taken as-is.
 // It's an estimate: reasonable up to ~10-12 reps, increasingly optimistic beyond.
@@ -15,9 +18,10 @@ export function dayKey(iso) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-const setOf = (e) => ({
-  weight: e.value, reps: e.data?.reps, e1rm: e1rm(e.value, e.data?.reps), recorded_at: e.recorded_at,
-});
+const setOf = (e) => {
+  const kg = toKg(e.value, e.unit);
+  return { weight: kg, reps: e.data?.reps, e1rm: e1rm(kg, e.data?.reps), recorded_at: e.recorded_at };
+};
 
 // One point per training day: that day's best set by estimated 1RM, oldest first.
 export function bestPerDay(entries) {
@@ -60,6 +64,3 @@ export function prKind(newSet, previous) {
   if (!atReps || s.weight > atReps.weight) return "reps";
   return null;
 }
-
-// Round a kg number for display: at most one decimal, no trailing ".0".
-export const fmtKg = (n) => String(Math.round(n * 10) / 10);

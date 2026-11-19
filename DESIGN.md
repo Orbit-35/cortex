@@ -122,9 +122,46 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Trade-off:** each new chart type is hand work. Revisit (vendor a library into `static/`) when dashboards need many chart types.
 
 ### D20. Entering past numbers: a date field on the log form, stored at local noon
+**Superseded by D25** (past workouts replace the per-set date field; the "local noon" rule still applies).
+
 - **Decision:** the log form has a date field defaulting to today. A past day is saved with `recorded_at` at 12:00 local time; the field stays on that day until "Today" is tapped, so a whole old session can be typed in a row. PR detection only compares against sets recorded before the new one.
 - **Why:** old PRs and history from before Cortex need a way in, and it's the same data as a normal set, so it uses the same form and the same `entries` rows (D1). Noon is as far from midnight as possible, so time-zone and daylight-saving shifts can't move it onto a neighbouring day.
 - **Trade-off:** backfilled sets have no real time of day. Bulk history from another app is better done with an importer (D2) than by typing.
+
+### D22. Workouts and exercises are entries too, with reserved metric names
+- **Decision:** a workout is an entry with `metric = "_workout"` (start time in `recorded_at`; name, notes, duration and exercise order in `data`). Each set points to its workout with `data.workout`. Custom exercises and edits are `_exercise` entries; settings use `module = "settings"`.
+- **Why:** keeps D1: no new tables, and workouts sync, back up and work offline through the same path as everything else. Typed exercise names are slugged with leading `_` stripped, so they can never collide with a reserved name.
+- **Trade-off:** code reading sets must skip `_`-prefixed metrics (`isSet()`). The server can't enforce "a set's workout exists". A workout can't contain the same exercise twice (exercise order is a list of keys).
+
+### D23. Exercise keys are permanent; built-ins ship as code, your changes overlay them
+- **Decision:** a set's `metric` is its exercise's key (`bench_press`), which never changes. The built-in library lives in `static/lifting/library.js` with names, equipment and muscles. Your exercises and edits are `_exercise` entries with the deterministic id `exercise:<key>`, layered on top.
+- **Why:** renaming touches one record, not every set, and merging two exercises is a rewrite of one key to another. Shipping built-ins as code means nothing is seeded per device (seeding would create a copy per device). A deterministic id means two devices editing the same exercise update the same record (D9 settles it) instead of creating duplicates.
+- **Trade-off:** keys are slugs of the first name, so an old key can look odd after a rename (it's never shown). Changing a built-in's muscles in code changes history's stats for everyone who hasn't overridden it.
+
+### D24. Weights are stored as typed, with their unit
+- **Decision:** a set stores the number entered and `unit` (`lb` or `kg`). Display converts to the chosen unit (a setting, default lb); maths converts to kg. Editing a workout writes back untouched sets exactly as they were.
+- **Why:** converting on save would turn 225 lb into 102.058 kg and back into 224.99 lb. Plates are real numbers in the unit you lift in.
+- **Trade-off:** every calculation must go through `toKg()`. Converted numbers are rounded to one decimal for display.
+
+### D25. Logging is per workout, saved as a whole
+- **Decision:** the Log tab starts a live workout (timer from the moment you start, sets ticked off), adds a past workout (date + duration in hours/minutes, stored at local noon per D20), or edits a saved one. All three use one editor working on a draft; Save/Finish writes the workout and all its sets in one IndexedDB transaction (`putEntries`). A live draft is kept in device storage until finished.
+- **Why:** you think in workouts, not loose sets. Saving as a whole means another device never sees half a workout, and the draft survives the phone killing the app mid-session. One editor for all three modes keeps them consistent.
+- **Trade-off:** a live workout isn't visible on other devices until finished, and is lost if the phone's site data is cleared mid-workout. Unticked sets are discarded on Finish (with a warning).
+
+### D26. Pre-workout sets are grouped into one workout per day, deterministically
+- **Decision:** sets without `data.workout` (logged before D25) are attached to a workout with the id `workout:legacy:<YYYY-MM-DD>`, created if missing.
+- **Why:** the id depends only on the data, so if two devices run the migration they produce the same workout and the same edits, which sync to one result.
+- **Trade-off:** a day's sets become one workout even if they were two sessions. Durations come from the first-to-last set span, or stay blank.
+
+### D27. Muscle credit: primary 1 set, each secondary 0.5
+- **Decision:** for muscle charts (radar, split), a set counts as 1 set for the exercise's primary muscle and 0.5 for each secondary muscle.
+- **Why:** this "fractional" method is what Boostcamp and Fitbod use and Hevy recommends, and a 2025 meta-analysis (Pelland et al.) found it predicted growth better than counting only primaries or counting everything fully.
+- **Trade-off:** 0.5 is a convention, not a measurement. Muscle tags are editable per exercise.
+
+### D28. Five bottom tabs; one editor screen on top
+- **Decision:** Log · Progress · Exercises · Bodyweight · Profile as a bottom bar (five is the Android maximum). The workout editor opens over the tabs as its own history entry, so the phone's back button closes it. Page code is split into ES modules per concern (`units`, `library`, `workouts`, `stats`, `app`) with no build step (D15).
+- **Why:** each tab has one job, reachable with a thumb. Pure modules are tested in Node.
+- **Trade-off:** Exercises, Bodyweight and Profile start as placeholders.
 
 ## Security and hosting
 
@@ -151,3 +188,5 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - Pruning old soft-deleted rows without breaking D8.
 - Recovering automatically when the server database is restored from an older backup (see D8).
 - Auth model that works for browser, Capacitor and Tauri alike.
+- Multiple users (a goal): entries will need an owner (`user_id`) and sync must scope by it. Deterministic ids (D23, D26) will need the owner in them.
+- Warm-up sets: should they count toward volume and PRs? Currently every set counts.
