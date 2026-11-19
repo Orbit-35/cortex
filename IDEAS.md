@@ -23,7 +23,8 @@ A quick place for notes and ideas that also works as a **shared clipboard betwee
   - *Share menu:* "Share → Cortex" from any app. An installed web app can register as a share target on Android, so this works before the native app exists.
   - *Text-selection menu:* "Cortex" as an option when you select text, like Copy and Translate. Needs the native Android app (Capacitor), because it's a native "process text" action.
 - **Send text from PC to phone:** a global keyboard shortcut (macro) that sends the current selection or clipboard to Cortex. Needs the Windows desktop app (Tauri), or an AutoHotkey script calling Cortex's API as a stopgap.
-- **Clipboard history on the PC:** Cortex keeps a history of everything sent through it. (Windows also has a built-in history: **Win + V**, which may need switching on in Settings → System → Clipboard.)
+- **Cortex clipboard: opt-in, not automatic.** Windows' clipboard history (**Win + V**) records everything you copy, on that PC only; it stays on as the local "undo" for re-pasting something old. Cortex's clipboard only holds what you **choose** to send (via the shortcut or the share menu), and that's what syncs to your other devices. Choosing makes it a curated list rather than a firehose, and keeps passwords and other things you copy out of Cortex.
+- **In the Windows app:** a clipboard panel listing what you've sent from any device, newest first, with one click or a shortcut to copy an item back. Pin items you reuse, delete ones you don't.
 - *How:* a `clips`/`notes` module on `entries`. Sync already moves data between devices within seconds when both are online; instant push to the other device would need a live connection (WebSocket) later.
 
 ## Ratings
@@ -43,6 +44,13 @@ Control audio precisely, track listening, and protect hearing.
 - **Same loudness across headphones:** earbuds and over-ear headphones need different slider positions for the same loudness. It's less about distance than about **sensitivity** (how loud a headphone plays from the same signal) and **seal/fit** (in-ear blocks outside noise, open headphones leak).
   - Each pair gets a **calibration offset in dB**, set once by ear or from published sensitivity figures.
   - Cortex detects which pair is connected (Bluetooth name) and applies its offset, so "70 dB" sounds the same on every pair.
+  - Offsets will be tuned by hand by testing, so safety comes first (below).
+- **Hard safety ceiling, always on:** a maximum level that nothing can exceed: not the slider, not a headphone offset, not a typo in a calibration number.
+  - The ceiling is applied **last**, after every offset, so a wrong offset can only make things too quiet, never too loud.
+  - Calibrating a new pair starts **quiet** and only steps up in small increments, never jumping.
+  - An unknown (not yet calibrated) pair gets a conservative default cap until it's calibrated.
+  - Raising the ceiling itself is a deliberate setting, never a slider drag.
+  - Android's own "high volume" warning and limit stay on as a second, independent guard.
 - **Listening stats and sound dose:** time listened, average level, and a daily/weekly "dose" against safe-listening guidance (WHO/EU safe-listening limits, roughly 80 dB for 40 hours a week).
   - Android has a built-in sound-dose meter on newer versions, but it isn't available on Android 13, so Cortex would estimate it from volume level × time × headphone offset.
 - *How:* needs the **native Android app**. Fine-grained volume can come from combining the system's steps with an extra digital gain stage (some existing apps do this through Android's audio-effects API). Stats need a background service. Real exact dB SPL needs per-headphone calibration; without it, levels are relative ("+3 dB louder than usual").
