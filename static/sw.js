@@ -6,10 +6,14 @@
 // fresh copy in the background for next time. So after changing a page, the first
 // reload still shows the old version and the second shows the new one.
 
-const CACHE = "cortex-shell-v2"; // bump to throw away every cached file
+const CACHE = "cortex-shell-v3"; // bump to throw away every cached file
 const SHELL = [
   "/lifting/",
+  "/lifting/app.js",
   "/lifting/stats.js",
+  "/lifting/units.js",
+  "/lifting/library.js",
+  "/lifting/workouts.js",
   "/core/cortex.js",
   "/manifest.json",
   "/icons/icon-192.png",

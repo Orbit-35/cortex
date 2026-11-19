@@ -10,79 +10,148 @@
 <title>Cortex · Lifting</title>
 <style>
   :root {
-    --bg: #111418; --card: #1b2027; --line: #2a313b; --text: #e8ecf1;
-    --muted: #8b95a3; --accent: #4f9cff; --danger: #ff6b6b; --good: #4cc38a;
-    --grid: #232a33;
+    --bg: #111418; --card: #1b2027; --card2: #222832; --line: #2a313b; --text: #e8ecf1;
+    --muted: #8b95a3; --accent: #4f9cff; --danger: #ff6b6b; --good: #4cc38a; --warn: #f5a524;
+    --grid: #232a33; --nav-h: 64px;
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { color-scheme: dark; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
     font: 17px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
-    max-width: 520px; margin-inline: auto;
   }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 16px; }
-  .tabs { display: flex; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
-  .tab {
-    font: inherit; font-size: 16px; font-weight: 600; color: var(--muted); background: none;
-    border: 0; border-radius: 9px; padding: 8px 16px; min-height: 40px;
+  [hidden] { display: none !important; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:active { transform: scale(.98); }
+  input, textarea {
+    width: 100%; font: inherit; color: var(--text); background: var(--card);
+    border: 1px solid var(--line); border-radius: 12px; padding: 12px; min-height: 48px;
   }
-  .tab[aria-selected="true"] { background: var(--line); color: var(--text); }
+  textarea { resize: vertical; min-height: 48px; font-size: 16px; }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+
+  /* Layout: a page column, a top bar, and the bottom tab bar */
+  .wrap { max-width: 560px; margin-inline: auto; padding: 0 16px; }
+  .top {
+    position: sticky; top: 0; z-index: 5; background: var(--bg);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: calc(12px + env(safe-area-inset-top)) 0 10px;
+  }
+  .top h1 { font-size: 26px; margin: 0; }
+  main { padding-bottom: calc(var(--nav-h) + 24px + env(safe-area-inset-bottom)); }
   .sync { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
   .sync::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
   .sync.ok::before { background: var(--good); }
-  .sync.pending::before { background: #f5a524; }
-  [hidden] { display: none !important; }
-  label { display: block; font-size: 14px; color: var(--muted); margin: 14px 0 6px; }
-  input {
-    width: 100%; font: inherit; font-size: 20px; color: var(--text);
-    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-    padding: 14px; min-height: 56px;
+  .sync.pending::before { background: var(--warn); }
+
+  nav.tabbar {
+    position: fixed; inset: auto 0 0 0; z-index: 10; background: var(--card);
+    border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom);
   }
-  input:focus { outline: 2px solid var(--accent); border-color: transparent; }
-  input[type="date"] { color-scheme: dark; font-size: 18px; }
-  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 8px 0 2px; }
+  nav.tabbar .in { max-width: 560px; margin-inline: auto; display: grid; grid-template-columns: repeat(5, 1fr); }
+  nav.tabbar button {
+    background: none; border: 0; height: var(--nav-h); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 3px; color: var(--muted); font-size: 11px; font-weight: 600;
+  }
+  nav.tabbar button[aria-selected="true"] { color: var(--accent); }
+  nav.tabbar svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* Shared bits */
+  .primary {
+    width: 100%; min-height: 56px; border: 0; border-radius: 14px; background: var(--accent);
+    color: #fff; font-size: 18px; font-weight: 700;
+  }
+  .primary.sm { width: auto; min-height: 40px; padding: 0 18px; font-size: 16px; border-radius: 10px; }
+  .secondary {
+    width: 100%; min-height: 48px; border: 1px solid var(--line); border-radius: 14px;
+    background: var(--card); font-size: 16px; font-weight: 600;
+  }
+  .ghost { background: none; border: 0; color: var(--muted); min-height: 44px; padding: 0 8px; }
+  .danger { color: var(--danger); }
+  .stack > * + * { margin-top: 10px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  h2 { font-size: 15px; color: var(--muted); margin: 28px 0 8px; font-weight: 600; }
+  .empty { color: var(--muted); font-size: 15px; padding: 24px 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; }
   .chip {
-    flex: none; font: inherit; font-size: 15px; color: var(--text);
-    background: var(--card); border: 1px solid var(--line); border-radius: 999px;
-    padding: 10px 14px; min-height: 44px;
+    flex: none; font-size: 15px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 999px; padding: 8px 14px; min-height: 40px;
   }
   .chip.on { border-color: var(--accent); color: var(--accent); }
-  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .stepper { display: grid; grid-template-columns: 56px 1fr 56px; gap: 6px; }
-  .stepper input { text-align: center; padding: 14px 4px; }
-  .step {
-    font: inherit; font-size: 24px; color: var(--text); background: var(--card);
-    border: 1px solid var(--line); border-radius: 12px; min-height: 56px;
+
+  /* Log tab */
+  .live { border-color: var(--accent); display: flex; align-items: center; gap: 12px; }
+  .live .grow { flex: 1; min-width: 0; }
+  .live b { display: block; }
+  .wcard { width: 100%; text-align: left; display: block; }
+  .wcard + .wcard { margin-top: 10px; }
+  .wcard .head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .wcard .name { font-weight: 700; }
+  .wcard .lines { margin-top: 8px; font-size: 15px; }
+  .wcard .line { display: flex; justify-content: space-between; gap: 8px; }
+  .wcard .line span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .wcard .notes { margin-top: 6px; font-size: 14px; color: var(--muted); white-space: pre-wrap; }
+
+  /* Full-screen sheets (workout editor, exercise picker) */
+  .sheet {
+    position: fixed; inset: 0; z-index: 20; background: var(--bg); overflow-y: auto;
+    overscroll-behavior: contain;
   }
-  .daterow { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
-  .daterow.past input { border-color: #f5a524; }
-  .today {
-    font: inherit; font-size: 15px; color: var(--text); background: var(--card);
-    border: 1px solid var(--line); border-radius: 12px; padding: 0 16px; min-height: 56px;
+  .sheet-top {
+    position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--line);
+    display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 8px;
+    padding: calc(8px + env(safe-area-inset-top)) 0 8px;
   }
-  .log {
-    width: 100%; margin-top: 20px; min-height: 64px; border: 0; border-radius: 14px;
-    background: var(--accent); color: #fff; font: inherit; font-size: 20px; font-weight: 700;
+  .sheet-top .title { text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .back { background: none; border: 0; font-size: 30px; line-height: 1; min-height: 48px; color: var(--text); }
+  .sheet-body { padding: 16px 0 calc(40px + env(safe-area-inset-bottom)); }
+  .ed-name { font-size: 22px; font-weight: 700; background: none; border-color: transparent; padding-inline: 0; }
+  .ed-name:focus { outline: none; border-bottom: 2px solid var(--accent); border-radius: 0; }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .fields label { font-size: 13px; color: var(--muted); }
+  .fields input { margin-top: 4px; }
+  .dur { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: 6px; align-items: center; margin-top: 4px; }
+  .dur input { margin: 0; text-align: center; padding: 12px 4px; }
+
+  .ex { margin-top: 22px; }
+  .ex-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .ex-head .exname { color: var(--accent); font-weight: 700; font-size: 18px; }
+  .ex-menu { display: flex; gap: 8px; margin: 6px 0; }
+  .ex-menu button { flex: 1; }
+  .ex textarea { margin: 6px 0; }
+  .grid { display: grid; gap: 6px; align-items: center; }
+  .grid.live { grid-template-columns: 34px minmax(0, 1fr) 78px 62px 48px; }
+  .grid.edit { grid-template-columns: 34px minmax(0, 1fr) 78px 62px; }
+  .ghead { font-size: 12px; color: var(--muted); font-weight: 600; text-align: center; padding: 8px 0 2px; }
+  .ghead.l { text-align: left; }
+  .setrow { padding: 3px 0; border-radius: 10px; }
+  .setrow.done { background: rgb(76 195 138 / .14); }
+  .setno, .prev {
+    background: none; border: 0; min-height: 44px; font-variant-numeric: tabular-nums;
   }
-  .log:active, .step:active, .chip:active, .today:active { transform: scale(.98); }
-  .msg { min-height: 22px; font-size: 14px; color: var(--muted); margin-top: 8px; text-align: center; }
-  .msg.pr { color: var(--text); font-weight: 600; }
-  h2 { font-size: 15px; color: var(--muted); margin: 28px 0 8px; font-weight: 600; }
-  ul { list-style: none; margin: 0; padding: 0; }
-  li {
-    display: flex; align-items: center; gap: 12px; padding: 12px 0;
-    border-bottom: 1px solid var(--line);
+  .setno { font-weight: 700; color: var(--muted); }
+  .prev { color: var(--muted); font-size: 14px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .setrow input { min-height: 44px; padding: 8px 4px; text-align: center; font-size: 18px; font-variant-numeric: tabular-nums; background: var(--card2); }
+  .tick {
+    min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--card2);
+    font-size: 20px; color: var(--muted);
   }
-  li .main { flex: 1; min-width: 0; }
-  li .ex { font-weight: 600; }
-  li .meta { font-size: 13px; color: var(--muted); }
-  li .num { font-variant-numeric: tabular-nums; font-size: 18px; }
-  .del {
-    background: none; border: 0; color: var(--muted); font-size: 22px;
-    width: 44px; height: 44px; border-radius: 10px;
+  .setrow.done .tick { background: var(--good); border-color: var(--good); color: #0b1a12; }
+  .pr { font-size: 13px; }
+  .addset { width: 100%; margin-top: 6px; min-height: 40px; border-radius: 10px; border: 0; background: var(--card); color: var(--muted); font-weight: 600; }
+  .addex { margin-top: 26px; }
+
+  /* Exercise picker */
+  .pk-search { margin: 0; }
+  .pkitem {
+    width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line);
+    padding: 12px 2px; min-height: 56px; display: flex; justify-content: space-between; gap: 8px; align-items: center;
   }
-  .del:active { color: var(--danger); }
+  .pkitem small { color: var(--muted); font-size: 13px; }
+  .pkitem[disabled] { opacity: .4; }
+  .pkitem.create { color: var(--accent); font-weight: 700; }
 
   /* Progress */
   .hero { margin: 18px 0 4px; }
@@ -96,7 +165,7 @@
   .tip {
     position: absolute; top: 0; transform: translateX(-50%); pointer-events: none;
     background: var(--card); border: 1px solid var(--line); border-radius: 10px;
-    padding: 6px 10px; font-size: 13px; white-space: nowrap; color: var(--text);
+    padding: 6px 10px; font-size: 13px; white-space: nowrap;
   }
   .tip b { font-variant-numeric: tabular-nums; }
   .tip span { color: var(--muted); }
@@ -104,356 +173,58 @@
   th, td { text-align: left; padding: 10px 0; border-bottom: 1px solid var(--line); }
   th { font-size: 13px; color: var(--muted); font-weight: 600; }
   td.r, th.r { text-align: right; }
-  .empty { color: var(--muted); font-size: 15px; padding: 24px 0; }
+
+  /* Lists (exercises, settings) */
+  .list { list-style: none; margin: 0; padding: 0; }
+  .list li { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .seg { display: inline-grid; grid-auto-flow: column; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .seg button { border: 0; background: none; border-radius: 8px; padding: 6px 16px; min-height: 36px; color: var(--muted); font-weight: 600; }
+  .seg button[aria-pressed="true"] { background: var(--line); color: var(--text); }
+
+  .toast {
+    position: fixed; left: 50%; transform: translateX(-50%); z-index: 30;
+    bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom));
+    background: var(--card2); border: 1px solid var(--line); border-radius: 12px;
+    padding: 10px 16px; font-size: 15px; max-width: calc(100% - 32px); text-align: center;
+    box-shadow: 0 8px 24px rgb(0 0 0 / .4);
+  }
 </style>
 </head>
 <body>
-<header>
-  <div class="tabs" role="tablist">
-    <button class="tab" role="tab" id="tab-log" aria-controls="view-log">Log</button>
-    <button class="tab" role="tab" id="tab-progress" aria-controls="view-progress">Progress</button>
+<div class="wrap">
+  <div class="top">
+    <h1 id="title">Log</h1>
+    <div class="sync" id="sync" role="status"></div>
   </div>
-  <div class="sync" id="sync" role="status"></div>
-</header>
 
-<main id="view-log" role="tabpanel" aria-labelledby="tab-log">
-  <form id="form" autocomplete="off">
-    <label for="exercise">Exercise</label>
-    <input id="exercise" list="exlist" placeholder="e.g. Bench Press" required enterkeyhint="next">
-    <datalist id="exlist"></datalist>
-    <div class="chips" id="chips"></div>
+  <main id="view-log"></main>
+  <main id="view-progress" hidden><div class="chips" id="pchips"></div><div id="pbody"></div></main>
+  <main id="view-exercises" hidden></main>
+  <main id="view-body" hidden>
+    <p class="empty">Bodyweight tracking is coming next: a chart with 1 week to all-time ranges, plus highest, lowest, average and weekly change.</p>
+  </main>
+  <main id="view-profile" hidden></main>
+</div>
 
-    <div class="row">
-      <div>
-        <label for="weight">Weight (kg)</label>
-        <div class="stepper">
-          <button type="button" class="step" data-t="weight" data-d="-2.5" aria-label="Weight down 2.5">−</button>
-          <input id="weight" type="number" inputmode="decimal" step="0.5" min="0" required>
-          <button type="button" class="step" data-t="weight" data-d="2.5" aria-label="Weight up 2.5">+</button>
-        </div>
-      </div>
-      <div>
-        <label for="reps">Reps</label>
-        <div class="stepper">
-          <button type="button" class="step" data-t="reps" data-d="-1" aria-label="Reps down 1">−</button>
-          <input id="reps" type="number" inputmode="numeric" step="1" min="1" required>
-          <button type="button" class="step" data-t="reps" data-d="1" aria-label="Reps up 1">+</button>
-        </div>
-      </div>
-    </div>
+<nav class="tabbar" aria-label="Sections">
+  <div class="in" role="tablist">
+    <button role="tab" data-tab="log" aria-label="Log">
+      <svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6v3H9zM9 11h6M9 15h4"/></svg>Log</button>
+    <button role="tab" data-tab="progress" aria-label="Progress">
+      <svg viewBox="0 0 24 24"><path d="M4 20h16M5 16l4-5 4 3 6-8"/></svg>Progress</button>
+    <button role="tab" data-tab="exercises" aria-label="Exercises">
+      <svg viewBox="0 0 24 24"><path d="M6.5 7v10M3.5 9.5v5M17.5 7v10M20.5 9.5v5M6.5 12h11"/></svg>Exercises</button>
+    <button role="tab" data-tab="body" aria-label="Bodyweight">
+      <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.5 10a5 5 0 0 1 7 0M12 10l1.5-2"/></svg>Body</button>
+    <button role="tab" data-tab="profile" aria-label="Profile">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Profile</button>
+  </div>
+</nav>
 
-    <label for="date">Date <span id="datehint"></span></label>
-    <div class="daterow" id="daterow">
-      <input id="date" type="date" required>
-      <button type="button" class="today" id="today" hidden>Today</button>
-    </div>
+<section class="sheet" id="editor" hidden aria-label="Workout"></section>
+<section class="sheet" id="picker" hidden aria-label="Choose exercise"></section>
+<div class="toast" id="toast" role="status" hidden></div>
 
-    <button class="log" type="submit">Log set</button>
-    <div class="msg" id="msg" role="status"></div>
-  </form>
-
-  <h2>Recent sets</h2>
-  <ul id="recent"></ul>
-</main>
-
-<main id="view-progress" role="tabpanel" aria-labelledby="tab-progress" hidden>
-  <div class="chips" id="pchips"></div>
-  <div id="pbody"></div>
-</main>
-
-<script type="module">
-// All data goes through the Cortex core: it saves to this device first and syncs
-// in the background, so this page works the same with or without a connection.
-import * as cortex from "/core/cortex.js";
-import { e1rm, dayKey, bestPerDay, personalRecords, prKind, fmtKg } from "/lifting/stats.js";
-
-const $ = (id) => document.getElementById(id);
-const UNIT = "kg";
-
-// "Bench Press" <-> "bench_press": the metric stored in Cortex is a slug.
-const toMetric = (name) => name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
-const toName = (metric) => metric.split("_").filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const todayKey = () => dayKey(new Date().toISOString());
-const fmtDay = (key, opts = { month: "short", day: "numeric" }) => {
-  const [y, m, d] = key.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  if (date.getFullYear() !== new Date().getFullYear()) opts = { ...opts, year: "numeric" };
-  return date.toLocaleDateString([], opts);
-};
-
-let all = [];          // every lifting entry on this device, newest first
-let progressMetric = null;
-
-// ---------- Tabs ----------
-
-function showTab(name) {
-  for (const t of ["log", "progress"]) {
-    $(`tab-${t}`).setAttribute("aria-selected", String(t === name));
-    $(`view-${t}`).hidden = t !== name;
-  }
-  if (name === "progress") renderProgress();
-}
-$("tab-log").addEventListener("click", () => { history.replaceState(null, "", "#log"); showTab("log"); });
-$("tab-progress").addEventListener("click", () => { history.replaceState(null, "", "#progress"); showTab("progress"); });
-
-// ---------- Log view ----------
-
-function renderExercises() {
-  const metrics = [...new Set(all.map((e) => e.metric))];
-  $("exlist").innerHTML = metrics.map(m => `<option value="${esc(toName(m))}">`).join("");
-  const current = toMetric($("exercise").value);
-  $("chips").innerHTML = metrics.slice(0, 8).map(m =>
-    `<button type="button" class="chip${m === current ? " on" : ""}" data-m="${esc(m)}">${esc(toName(m))}</button>`
-  ).join("");
-}
-
-function renderRecent() {
-  $("recent").innerHTML = all.slice(0, 30).map(e => {
-    const t = new Date(e.recorded_at);
-    const when = dayKey(e.recorded_at) === todayKey()
-      ? t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-      : fmtDay(dayKey(e.recorded_at));
-    const set = e.data.set ? ` · set ${esc(e.data.set)}` : "";
-    return `<li>
-      <div class="main"><div class="ex">${esc(toName(e.metric))}</div><div class="meta">${esc(when)}${set}</div></div>
-      <div class="num">${esc(e.value)} ${esc(e.unit ?? "")} × ${esc(e.data.reps ?? "?")}</div>
-      <button class="del" data-id="${esc(e.client_id)}" aria-label="Delete set">×</button>
-    </li>`;
-  }).join("") || `<li class="meta">No sets yet.</li>`;
-}
-
-// The date field defaults to today. Picking an earlier day lets you enter old numbers
-// (PRs from before Cortex existed); it stays on that day so a whole session can be typed in.
-function renderDate() {
-  const past = $("date").value && $("date").value !== todayKey();
-  $("daterow").classList.toggle("past", past);
-  $("today").hidden = !past;
-  $("datehint").textContent = past ? "· entering a past session" : "";
-}
-$("date").max = todayKey();
-$("date").value = todayKey();
-$("date").addEventListener("change", renderDate);
-$("today").addEventListener("click", () => { $("date").value = todayKey(); renderDate(); });
-
-// A past day is stored at noon local time: far enough from midnight that time zones
-// and daylight saving can't push it onto a neighbouring day.
-function recordedAtFor(key) {
-  if (key === todayKey()) return new Date().toISOString();
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d, 12).toISOString();
-}
-
-function prefillFrom(metric) {
-  // Pre-fill weight/reps from the last set of this exercise, so repeat sets are one tap.
-  const last = all.find(e => e.metric === metric);
-  if (last) { $("weight").value = last.value; $("reps").value = last.data.reps ?? ""; }
-}
-
-$("chips").addEventListener("click", (ev) => {
-  const m = ev.target.dataset.m;
-  if (!m) return;
-  $("exercise").value = toName(m);
-  prefillFrom(m);
-  renderExercises();
-});
-
-$("exercise").addEventListener("change", () => prefillFrom(toMetric($("exercise").value)));
-
-document.querySelectorAll(".step").forEach(b => b.addEventListener("click", () => {
-  const input = $(b.dataset.t);
-  const next = (parseFloat(input.value) || 0) + parseFloat(b.dataset.d);
-  input.value = Math.max(0, Math.round(next * 2) / 2);
-}));
-
-$("form").addEventListener("submit", async (ev) => {
-  ev.preventDefault();
-  const metric = toMetric($("exercise").value);
-  if (!metric) return;
-  const day = $("date").value || todayKey();
-  const previous = all.filter(e => e.metric === metric);
-  const setNo = previous.filter(e => dayKey(e.recorded_at) === day).length + 1;
-  const entry = {
-    module: "lifting", metric,
-    value: parseFloat($("weight").value), unit: UNIT,
-    data: { reps: parseInt($("reps").value, 10), set: setNo },
-    recorded_at: recordedAtFor(day),
-  };
-  try {
-    // Only compare against sets from before this one, so backfilling old numbers
-    // doesn't announce a "PR" that was later beaten.
-    const before = previous.filter(e => e.recorded_at < entry.recorded_at);
-    const kind = prKind({ ...entry }, before);
-    await cortex.addEntry(entry);
-    const where = day === todayKey() ? "" : ` on ${fmtDay(day)}`;
-    let text = `Logged ${toName(metric)} set ${setNo}${where} ✓`;
-    if (kind === "e1rm") text = `🏆 New best: ~${fmtKg(e1rm(entry.value, entry.data.reps))} kg estimated 1RM`;
-    else if (kind === "reps") text = `🏆 Rep PR: heaviest ${entry.data.reps}-rep set yet`;
-    $("msg").textContent = text;
-    $("msg").classList.toggle("pr", !!kind);
-    if (navigator.vibrate) navigator.vibrate(kind ? [30, 60, 30] : 30);
-  } catch (err) {
-    $("msg").textContent = "Couldn't save: " + err.message;
-    $("msg").classList.remove("pr");
-  }
-});
-
-$("recent").addEventListener("click", async (ev) => {
-  const id = ev.target.dataset.id;
-  if (!id || !confirm("Delete this set?")) return;
-  await cortex.deleteEntry(id);
-});
-
-// ---------- Progress view ----------
-
-function renderProgress() {
-  const metrics = [...new Set(all.map((e) => e.metric))];
-  if (!metrics.includes(progressMetric)) progressMetric = metrics[0] ?? null;
-  $("pchips").innerHTML = metrics.map(m =>
-    `<button type="button" class="chip${m === progressMetric ? " on" : ""}" data-m="${esc(m)}">${esc(toName(m))}</button>`
-  ).join("");
-  if (!progressMetric) {
-    $("pbody").innerHTML = `<p class="empty">Log a few sets and your progress shows up here.</p>`;
-    return;
-  }
-
-  const sets = all.filter(e => e.metric === progressMetric);
-  const days = bestPerDay(sets);
-  const { best, reps } = personalRecords(sets);
-  const since = days.length > 1 ? days[0] : null;
-  const change = since ? best.e1rm - since.e1rm : 0;
-
-  $("pbody").innerHTML = `
-    <div class="hero">
-      <div class="label">${esc(toName(progressMetric))} · best estimated 1RM</div>
-      <div class="big">${fmtKg(best.e1rm)} <small>kg</small></div>
-      <div class="sub">from ${fmtKg(best.weight)} × ${best.reps} on ${esc(fmtDay(dayKey(best.recorded_at)))}${
-        since && change > 0 ? ` · +${fmtKg(change)} kg since ${esc(fmtDay(since.day))}` : ""}</div>
-    </div>
-    <div class="chart" id="chart"></div>
-    <h2>Rep records</h2>
-    <table>
-      <thead><tr><th>Reps</th><th class="r">Heaviest</th><th class="r">Est. 1RM</th><th class="r">Date</th></tr></thead>
-      <tbody>${reps.map(r => `<tr>
-        <td>${r.reps}</td><td class="r">${fmtKg(r.weight)} kg</td>
-        <td class="r">${fmtKg(r.e1rm)}</td><td class="r">${esc(fmtDay(dayKey(r.recorded_at)))}</td>
-      </tr>`).join("")}</tbody>
-    </table>`;
-  drawChart($("chart"), days);
-}
-
-$("pchips").addEventListener("click", (ev) => {
-  const m = ev.target.dataset.m;
-  if (!m) return;
-  progressMetric = m;
-  renderProgress();
-});
-
-// Hand-drawn SVG line chart of best e1RM per training day. X is real time, so gaps
-// between sessions show as gaps. Tap or drag across it to read any day.
-function drawChart(el, days) {
-  if (days.length < 2) {
-    el.innerHTML = `<p class="empty">One session so far. Log another day to see a trend line.</p>`;
-    return;
-  }
-  const W = el.clientWidth || 340, H = 220;
-  const pad = { l: 36, r: 12, t: 40, b: 26 }; // top room is for the tooltip
-  const t = days.map(d => { const [y, m, dd] = d.day.split("-").map(Number); return new Date(y, m - 1, dd).getTime(); });
-  const v = days.map(d => d.e1rm);
-
-  // y: a "nice" step of 1, 2, 2.5 or 5 × 10^n giving about 4 gridlines.
-  let lo = Math.min(...v), hi = Math.max(...v);
-  if (hi - lo < 5) { lo -= 2.5; hi += 2.5; }
-  const raw = (hi - lo) / 4, mag = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map(s => s * mag).find(s => s >= raw);
-  lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
-
-  const x = (ms) => pad.l + (ms - t[0]) / (t.at(-1) - t[0]) * (W - pad.l - pad.r);
-  const y = (val) => pad.t + (hi - val) / (hi - lo) * (H - pad.t - pad.b);
-
-  const grid = [];
-  for (let g = lo; g <= hi + 1e-9; g += step) {
-    grid.push(`<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(g)}" y2="${y(g)}" stroke="var(--grid)" stroke-width="1"/>
-      <text x="${pad.l - 8}" y="${y(g) + 4}" text-anchor="end">${fmtKg(g)}</text>`);
-  }
-  const xLabels = [0, t.length - 1].map(i =>
-    `<text x="${x(t[i])}" y="${H - 6}" text-anchor="${i === 0 ? "start" : "end"}">${esc(fmtDay(days[i].day))}</text>`);
-  const path = t.map((ms, i) => `${i ? "L" : "M"}${x(ms).toFixed(1)},${y(v[i]).toFixed(1)}`).join("");
-  const dots = t.map((ms, i) =>
-    `<circle cx="${x(ms)}" cy="${y(v[i])}" r="4" fill="var(--accent)" stroke="var(--bg)" stroke-width="2"/>`).join("");
-
-  el.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Best estimated 1RM per session, ${esc(fmtDay(days[0].day))} to ${esc(fmtDay(days.at(-1).day))}">
-      ${grid.join("")}${xLabels.join("")}
-      <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-      <line id="cross" y1="${pad.t}" y2="${H - pad.b}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
-      ${dots}
-      <circle id="focus" r="6" fill="var(--accent)" stroke="var(--text)" stroke-width="2" visibility="hidden"/>
-    </svg>
-    <div class="tip" id="tip" hidden></div>`;
-
-  const svg = el.querySelector("svg"), cross = el.querySelector("#cross"),
-        focus = el.querySelector("#focus"), tip = el.querySelector("#tip");
-  const show = (clientX) => {
-    const r = svg.getBoundingClientRect();
-    const px = (clientX - r.left) * (W / r.width);
-    let i = 0;
-    for (let k = 1; k < t.length; k++) if (Math.abs(x(t[k]) - px) < Math.abs(x(t[i]) - px)) i = k;
-    const cx = x(t[i]), cy = y(v[i]);
-    cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("visibility", "visible");
-    focus.setAttribute("cx", cx); focus.setAttribute("cy", cy); focus.setAttribute("visibility", "visible");
-    const d = days[i];
-    tip.innerHTML = `<b>${fmtKg(d.e1rm)} kg</b> <span>· ${fmtKg(d.weight)}×${d.reps} · ${esc(fmtDay(d.day))}</span>`;
-    tip.hidden = false;
-    const left = cx * (r.width / W);
-    tip.style.left = `${Math.min(Math.max(left, tip.offsetWidth / 2), r.width - tip.offsetWidth / 2)}px`;
-  };
-  const hide = () => { cross.setAttribute("visibility", "hidden"); focus.setAttribute("visibility", "hidden"); tip.hidden = true; };
-  svg.addEventListener("pointerdown", (e) => show(e.clientX));
-  svg.addEventListener("pointermove", (e) => { if (e.pointerType === "mouse" || e.buttons) show(e.clientX); });
-  svg.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") hide(); });
-}
-
-let resizeTimer;
-addEventListener("resize", () => {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { if (!$("view-progress").hidden) renderProgress(); }, 150);
-});
-
-// ---------- Wiring ----------
-
-async function showSync() {
-  const { pending, online } = await cortex.getStatus();
-  const el = $("sync");
-  if (pending > 0) { el.textContent = `${pending} pending`; el.className = "sync pending"; }
-  else if (online) { el.textContent = "synced"; el.className = "sync ok"; }
-  else { el.textContent = online === false ? "offline" : ""; el.className = "sync"; }
-}
-
-async function refresh() {
-  all = await cortex.listEntries({ module: "lifting", limit: Infinity });
-  renderRecent();
-  renderExercises();
-  if (!$("view-progress").hidden) renderProgress();
-  await showSync();
-}
-
-// Redraw whenever local data changes: after a log or delete, and after each sync
-// (which may bring in sets logged on another device).
-cortex.onChange(refresh);
-
-showTab(location.hash === "#progress" ? "progress" : "log");
-renderDate();
-refresh().then(() => {
-  if (all[0]) { $("exercise").value = toName(all[0].metric); prefillFrom(all[0].metric); renderExercises(); }
-  cortex.startAutoSync();
-});
-
-// The service worker keeps the app shell on the device so this page opens offline.
-// Browsers only allow it on HTTPS or localhost.
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js").catch((err) => console.warn("No service worker:", err));
-}
-</script>
+<script type="module" src="/lifting/app.js"></script>
 </body>
 </html>

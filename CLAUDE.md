@@ -24,7 +24,8 @@ A personal software platform: one core (FastAPI + SQLite + login, later) with sm
 - Frontend: static pages under `static/<module>/`, served by FastAPI, built toward a PWA.
 - One generic `entries` table: `module, metric, value, unit, data (JSON), recorded_at (ISO-8601), source, external_id`, plus sync columns `client_id, updated_at, deleted_at, rev`, with `UNIQUE(source, external_id)` so re-imports never duplicate.
 - New module = new page + conventions on `entries`, not new tables (unless truly needed).
-- Lifting convention: `module=lifting`, `metric=<exercise_slug>` (e.g. `bench_press`), `value`=weight, `unit=kg`, `data={"reps": n, "set": n}`.
+- Lifting convention (DESIGN D22–D26): sets are `module=lifting`, `metric=<exercise key>` (e.g. `bench_press`, permanent), `value`=weight as typed, `unit=lb|kg`, `data={"reps", "set", "workout": <workout client_id>}`. Workouts are `metric=_workout`; custom/edited exercises `metric=_exercise` (id `exercise:<key>`); settings `module=settings`. Metrics starting with `_` are never sets.
+- Lifting page code: `static/lifting/` = `app.js` (UI) + pure modules `workouts.js`, `library.js`, `units.js`, `stats.js` (tested: `node tests/*.test.mjs`).
 - Importers (later): each converts one app's export/API into entries; always set `source` + `external_id`; keep raw files under `raw/` (gitignored).
 
 ## Running
@@ -45,4 +46,4 @@ API docs at http://localhost:8000/docs, lifting page at http://localhost:8000/li
 - Never commit `.venv`, `cortex.db`, `__pycache__`, data exports, secrets.
 
 ## Roadmap
-Core (started) → Lifting (log + recent sets ✓, progress chart + past-date entry ✓, installed on phone via Tailscale ✓) → Body/food → Video challenge → Importers → Android companion (volume slider, sound-dose logger) → maybe PC clipboard companion → Guitar practice app.
+Core (started) → Lifting (installed on phone via Tailscale ✓; step 1 workouts + 5 tabs ✓ → 2 Progress overview + Exercises editing → 3 Bodyweight → 4 Profile → 5 photos/posts; rest timer later) → Body/food → Video challenge → Importers → Android companion (volume slider, sound-dose logger) → maybe PC clipboard companion → Guitar practice app.
