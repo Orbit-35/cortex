@@ -138,6 +138,13 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Why:** the code is worth sharing; the life data is not.
 - **Trade-off:** personal context and real examples must live outside the repo.
 
+## Operations
+
+### D21. Daily server backups, newest 30 kept
+- **Decision:** while the server runs, it checks hourly and copies `cortex.db` to `backups/cortex-YYYY-MM-DD.db` once per day using SQLite's backup API, then deletes all but the newest 30. Folder overridable with `CORTEX_BACKUPS`; gitignored.
+- **Why:** the server copy is the merged history of every device; losing that one file shouldn't mean losing it. The backup API gives a consistent snapshot even mid-write (a plain file copy might not). Writing to a temp name and renaming means a half-written copy never looks like a real backup.
+- **Trade-off:** backups sit on the same disk as the database, so they protect against corruption and mistakes, not a dead drive. Copying them off the machine (cloud drive, the future Pi) is a later step.
+
 ## Open questions
 
 - Editing an entry (not just create/delete): the sync layer supports it, no UI yet.

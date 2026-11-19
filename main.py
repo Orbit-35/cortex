@@ -7,6 +7,7 @@ Cortex is local-first: clients save to their own storage and call POST /api/sync
 to push their outbox and pull what changed. See CLAUDE.md > Architecture.
 """
 
+import asyncio
 import json
 import os
 import sqlite3
@@ -24,6 +25,8 @@ from pydantic import BaseModel, Field, field_validator
 BASE_DIR = Path(__file__).parent
 # CORTEX_DB lets tests run against a throwaway database instead of the real one.
 DB_PATH = Path(os.environ.get("CORTEX_DB", BASE_DIR / "cortex.db"))
+BACKUP_DIR = Path(os.environ.get("CORTEX_BACKUPS", BASE_DIR / "backups"))
+BACKUPS_KEPT = 30
 
 TABLE = """
 CREATE TABLE IF NOT EXISTS entries (
@@ -124,6 +127,36 @@ def migrate(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def backup_today() -> Path | None:
+    """Copy the database to backups/cortex-YYYY-MM-DD.db once per (local) day and
+    keep the newest BACKUPS_KEPT copies. Uses SQLite's backup API, which takes a
+    consistent snapshot even while the server is writing."""
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    target = BACKUP_DIR / f"cortex-{datetime.now().date().isoformat()}.db"
+    if target.exists():
+        return None
+    tmp = target.with_suffix(".db.tmp")
+    src, dst = connect(), sqlite3.connect(tmp)
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+    tmp.replace(target)  # only a complete copy ever gets the real name
+    for old in sorted(BACKUP_DIR.glob("cortex-*.db"))[:-BACKUPS_KEPT]:
+        old.unlink()
+    return target
+
+
+async def backup_loop() -> None:
+    while True:
+        try:
+            await asyncio.to_thread(backup_today)
+        except Exception as exc:  # a failed backup must never take the server down
+            print(f"Cortex backup failed: {exc}")
+        await asyncio.sleep(3600)  # hourly check; at most one copy per day
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     conn = connect()
@@ -131,7 +164,9 @@ async def lifespan(app: FastAPI):
         migrate(conn)
     finally:
         conn.close()
+    task = asyncio.create_task(backup_loop())
     yield
+    task.cancel()
 
 
 app = FastAPI(title="Cortex", lifespan=lifespan)
