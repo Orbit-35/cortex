@@ -45,4 +45,4 @@ API docs at http://localhost:8000/docs, lifting page at http://localhost:8000/li
 - Never commit `.venv`, `cortex.db`, `__pycache__`, data exports, secrets.
 
 ## Roadmap
-Core (started) → Lifting (log + recent sets ✓, progress chart + past-date entry ✓, phone testing) → Body/food → Video challenge → Importers → Android companion (volume slider, sound-dose logger) → maybe PC clipboard companion → Guitar practice app.
+Core (started) → Lifting (log + recent sets ✓, progress chart + past-date entry ✓, installed on phone via Tailscale ✓) → Body/food → Video challenge → Importers → Android companion (volume slider, sound-dose logger) → maybe PC clipboard companion → Guitar practice app.
