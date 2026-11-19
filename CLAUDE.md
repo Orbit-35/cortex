@@ -46,4 +46,6 @@ API docs at http://localhost:8000/docs, lifting page at http://localhost:8000/li
 - Never commit `.venv`, `cortex.db`, `__pycache__`, data exports, secrets.
 
 ## Roadmap
+Future ideas (not scheduled) live in `IDEAS.md`; add new ones there.
+
 Core (started) → Lifting (installed on phone via Tailscale ✓; step 1 workouts + 5 tabs ✓, step 2 Progress overview + Exercises editing ✓ → 3 Bodyweight → 4 Profile → 5 photos/posts; rest timer later) → Body/food → Video challenge → Importers → Android companion (volume slider, sound-dose logger) → maybe PC clipboard companion → Guitar practice app.
