@@ -44,13 +44,11 @@ Control audio precisely, track listening, and protect hearing.
 - **Same loudness across headphones:** earbuds and over-ear headphones need different slider positions for the same loudness. It's less about distance than about **sensitivity** (how loud a headphone plays from the same signal) and **seal/fit** (in-ear blocks outside noise, open headphones leak).
   - Each pair gets a **calibration offset in dB**, set once by ear or from published sensitivity figures.
   - Cortex detects which pair is connected (Bluetooth name) and applies its offset, so "70 dB" sounds the same on every pair.
-  - Offsets will be tuned by hand by testing, so safety comes first (below).
-- **Hard safety ceiling, always on:** a maximum level that nothing can exceed: not the slider, not a headphone offset, not a typo in a calibration number.
-  - The ceiling is applied **last**, after every offset, so a wrong offset can only make things too quiet, never too loud.
-  - Calibrating a new pair starts **quiet** and only steps up in small increments, never jumping.
-  - An unknown (not yet calibrated) pair gets a conservative default cap until it's calibrated.
-  - Raising the ceiling itself is a deliberate setting, never a slider drag.
-  - Android's own "high volume" warning and limit stay on as a second, independent guard.
+  - Offsets will be tuned by hand by testing.
+- **Safe calibration mode:** while testing and tuning a pair's offset (not during normal listening), volume is capped at a safe level.
+  - Testing starts **quiet** and steps up in small increments, never jumping.
+  - The cap is applied after the offset being tested, so a wrong or mistyped number can't produce a loud blast mid-test.
+  - Normal listening has no Cortex cap; Android's own "high volume" warning still applies as usual.
 - **Listening stats and sound dose:** time listened, average level, and a daily/weekly "dose" against safe-listening guidance (WHO/EU safe-listening limits, roughly 80 dB for 40 hours a week).
   - Android has a built-in sound-dose meter on newer versions, but it isn't available on Android 13, so Cortex would estimate it from volume level × time × headphone offset.
 - *How:* needs the **native Android app**. Fine-grained volume can come from combining the system's steps with an extra digital gain stage (some existing apps do this through Android's audio-effects API). Stats need a background service. Real exact dB SPL needs per-headphone calibration; without it, levels are relative ("+3 dB louder than usual").
