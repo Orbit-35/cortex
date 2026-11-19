@@ -92,3 +92,22 @@ assert.equal(pastOut[0].data.duration_min, 75);
 
 assert.ok(deletePlan(w).every((e) => e.deleted_at));
 console.log("workouts.js, units.js, library.js: all tests passed");
+
+// ---- merging exercises ----
+import { mergePlan } from "../static/lifting/workouts.js";
+{
+  const W = (id, d, keys) => ({ client_id: id, module: "lifting", metric: WORKOUT, recorded_at: at(d, 12), data: { name: "W", exercises: keys.map((key) => ({ key, notes: key === "bench" ? "old note" : "" })) } });
+  const st = (id, key, wid, n, d) => ({ client_id: id, module: "lifting", metric: key, value: 60, unit: "kg", data: { reps: 5, set: n, workout: wid }, recorded_at: at(d, 12) });
+  const db = [W("w1", 1, ["bench", "squat"]), W("w2", 2, ["bench_press", "bench"]),
+    st("x1", "bench", "w1", 1, 1), st("x2", "bench", "w2", 1, 2), st("y1", "bench_press", "w2", 1, 2), st("y2", "bench_press", "w2", 2, 2)];
+  const out = mergePlan(db, "bench", "bench_press");
+  const by = Object.fromEntries(out.map((e) => [e.client_id, e]));
+  assert.equal(by.x1.metric, "bench_press");
+  assert.equal(by.x1.data.set, 1);
+  assert.equal(by.x2.data.set, 3);                                   // after the 2 existing sets
+  assert.deepEqual(by.w1.data.exercises.map((x) => x.key), ["bench_press", "squat"]);
+  assert.deepEqual(by.w2.data.exercises.map((x) => x.key), ["bench_press"]);
+  assert.equal(by.w2.data.exercises[0].notes, "old note");
+  assert.equal(mergePlan(db, "bench", "bench").length, 0);
+  console.log("mergePlan: ok");
+}

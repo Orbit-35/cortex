@@ -185,3 +185,26 @@ export function deletePlan(workout, now = new Date()) {
   const at = now.toISOString();
   return [workout.entry, ...workout.exercises.flatMap((x) => x.sets)].map((e) => ({ ...e, deleted_at: at }));
 }
+
+// Merge exercise `from` into `to`: every set of `from` becomes a set of `to`, workouts
+// list `to` instead, and `from` is hidden. If a workout had both, the merged sets are
+// numbered after `to`'s. `fromDef` is the exercise entry/definition to hide.
+export function mergePlan(entries, from, to, now = new Date()) {
+  if (from === to) return [];
+  const workouts = groupWorkouts(entries);
+  const out = [];
+  for (const w of workouts) {
+    const a = w.exercises.find((x) => x.key === from);
+    if (!a) continue;
+    const b = w.exercises.find((x) => x.key === to);
+    const offset = b ? b.sets.length : 0;
+    a.sets.forEach((s, i) => out.push({ ...s, metric: to, data: { ...s.data, set: offset + i + 1 } }));
+    const list = (w.entry.data?.exercises || []).filter((x) => x.key !== from || !b)
+      .map((x) => (x.key === from ? { ...x, key: to } : x));
+    if (b && a.notes) { const t = list.find((x) => x.key === to); if (t) t.notes = [t.notes, a.notes].filter(Boolean).join("\n"); }
+    out.push({ ...w.entry, data: { ...w.entry.data, exercises: list } });
+  }
+  // Sets that somehow have no workout still move.
+  for (const s of entries) if (isSet(s) && s.metric === from && !s.data?.workout) out.push({ ...s, metric: to });
+  return out;
+}

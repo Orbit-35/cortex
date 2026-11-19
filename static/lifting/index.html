@@ -13,6 +13,8 @@
     --bg: #111418; --card: #1b2027; --card2: #222832; --line: #2a313b; --text: #e8ecf1;
     --muted: #8b95a3; --accent: #4f9cff; --danger: #ff6b6b; --good: #4cc38a; --warn: #f5a524;
     --grid: #232a33; --nav-h: 64px;
+    /* Muscle-group colours: the dataviz reference categorical palette, dark steps, fixed order */
+    --g-chest: #3987e5; --g-back: #d95926; --g-shoulders: #199e70; --g-arms: #c98500; --g-legs: #d55181; --g-core: #0ca30c;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html { color-scheme: dark; }
@@ -74,7 +76,8 @@
   h2 { font-size: 15px; color: var(--muted); margin: 28px 0 8px; font-weight: 600; }
   .empty { color: var(--muted); font-size: 15px; padding: 24px 0; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
-  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
   .chip {
     flex: none; font-size: 15px; background: var(--card); border: 1px solid var(--line);
     border-radius: 999px; padding: 8px 14px; min-height: 40px;
@@ -192,6 +195,36 @@
   .seg button { border: 0; background: none; border-radius: 8px; padding: 6px 16px; min-height: 36px; color: var(--muted); font-weight: 600; }
   .seg button[aria-pressed="true"] { background: var(--line); color: var(--text); }
 
+  /* Progress overview */
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+  .tile .k, .milestone .k { font-size: 13px; color: var(--muted); }
+  .tile .v { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile .v small { font-size: 14px; color: var(--muted); font-weight: 600; }
+  .milestone { margin-top: 14px; }
+  .milestone .v { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .bar { height: 10px; background: var(--card2); border-radius: 999px; overflow: hidden; margin: 10px 0 6px; }
+  .bar span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+  .journey { margin-top: 6px; }
+  .radar svg { display: block; width: 100%; max-width: 420px; margin: 0 auto; }
+  .radar .rl { fill: var(--text); font-size: 13px; font-weight: 600; }
+  .radar .rv { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .split { display: grid; grid-template-columns: 150px 1fr; gap: 16px; align-items: center; }
+  .split svg { width: 150px; height: 150px; }
+  .split .sv { fill: var(--text); font-size: 26px; font-weight: 700; }
+  .split .sk { fill: var(--muted); font-size: 13px; }
+  .legend { list-style: none; margin: 0; padding: 0; }
+  .legend li { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 15px; }
+  .legend i { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+  .legend span { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* Exercises tab + edit form */
+  .exbar { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+  .exbar .primary.sm { min-height: 48px; }
+  .wrapchips { flex-wrap: wrap; }
+  .lbl { display: block; font-size: 14px; color: var(--muted); margin: 16px 0 6px; }
+  .lbl input { margin-top: 6px; color: var(--text); font-size: 18px; }
+
   .toast {
     position: fixed; left: 50%; transform: translateX(-50%); z-index: 30;
     bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom));
@@ -212,7 +245,7 @@
   </div>
 
   <main id="view-log"></main>
-  <main id="view-progress" hidden><div class="chips" id="pchips"></div><div id="pbody"></div></main>
+  <main id="view-progress" hidden></main>
   <main id="view-exercises" hidden></main>
   <main id="view-body" hidden>
     <p class="empty">Bodyweight tracking is coming next: a chart with 1 week to all-time ranges, plus highest, lowest, average and weekly change.</p>
@@ -238,6 +271,7 @@
 <section class="sheet" id="editor" hidden aria-label="Workout"></section>
 <section class="sheet" id="picker" hidden aria-label="Choose exercise"></section>
 <section class="sheet" id="exsheet" hidden aria-label="Exercise"></section>
+<section class="sheet" id="exedit" hidden aria-label="Edit exercise"></section>
 <section class="sheet" id="settings" hidden aria-label="Settings"></section>
 <div class="toast" id="toast" role="status" hidden></div>
 

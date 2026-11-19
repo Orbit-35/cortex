@@ -7,8 +7,9 @@ import { convert, showWeight, parseWeight, fmtNum } from "/lifting/units.js";
 import { MUSCLES, resolveExercises, exerciseFor, exerciseId, newKey } from "/lifting/library.js";
 import {
   EXERCISE, isSet, groupWorkouts, legacyPlan, defaultName, previousSets, volumeKg,
-  newDraft, blankRow, draftFromWorkout, keptRows, commitPlan, deletePlan,
+  newDraft, blankRow, draftFromWorkout, keptRows, commitPlan, deletePlan, mergePlan,
 } from "/lifting/workouts.js";
+import { GROUPS, GROUP_LABEL, groupSets, prEvents, totals, milestone, since } from "/lifting/progress.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -29,7 +30,7 @@ let lib = new Map();     // exercise key -> definition
 let unit = "lb";         // display unit (setting)
 let tab = "log";
 let historyShown = 40;
-let progressKey = null;
+let prs = new Map();     // set id -> "e1rm" | "reps" for every set that was a PR
 let chartMetric = "e1rm"; // which line the exercise charts show: e1rm | heaviest | volume
 let editor = null;       // { draft, original, dirty, menus:Set, notes:Set }
 
@@ -127,7 +128,8 @@ function renderLog() {
       const m = fmtDate(w.start, { month: "long", year: "numeric" });
       if (m !== month) { html += `<h2>${esc(m)}</h2>`; month = m; }
       const all = w.exercises.flatMap((x) => x.sets);
-      const meta = [fmtDuration(w.duration_min), all.length ? `${Math.round(convert(volumeKg(all), "kg", unit)).toLocaleString()} ${unit}` : "", `${all.length} sets`]
+      const nPr = all.filter((s) => prs.has(s.client_id)).length;
+      const meta = [fmtDuration(w.duration_min), all.length ? `${Math.round(convert(volumeKg(all), "kg", unit)).toLocaleString()} ${unit}` : "", `${all.length} sets`, nPr ? `🏆 ${nPr} PR${nPr > 1 ? "s" : ""}` : ""]
         .filter(Boolean).join(" · ");
       html += `<button class="card wcard" data-act="open" data-id="${esc(w.id)}">
         <div class="head"><span class="name">${esc(w.name)}</span><span class="muted small">${esc(fmtDate(w.start))}</span></div>
@@ -194,11 +196,14 @@ function closeEditor() {
   render();
 }
 
-// Overlay screens that sit on top of everything (including the editor). Each is one
-// browser-history step, so the phone's back button closes the top one.
-const OVERLAYS = { picker: "picker", exercise: "exsheet", settings: "settings" };
+// Overlay screens stack on top of the tabs and the editor (e.g. workout → exercise →
+// edit → picker). Each is one browser-history step, so the phone's back button
+// closes exactly the top one.
+const OVERLAYS = { picker: "picker", exercise: "exsheet", exedit: "exedit", settings: "settings" };
+const stack = [];
 function openOverlay(ui) {
   history.pushState({ ui }, "", location.hash);
+  stack.push(ui);
   const el = $(OVERLAYS[ui]);
   el.hidden = false;
   el.scrollTop = 0;
@@ -208,7 +213,7 @@ function openOverlay(ui) {
 
 addEventListener("popstate", (ev) => {
   const ui = ev.state?.ui;
-  for (const [name, id] of Object.entries(OVERLAYS)) if (ui !== name) $(id).hidden = true;
+  while (stack.length && stack.at(-1) !== ui) $(OVERLAYS[stack.pop()]).hidden = true;
   if (!editor && !ui) document.body.style.overflow = "";
   if (editor && !ui) {
     // A live workout is safe in storage; an edit with unsaved changes asks first.
@@ -298,7 +303,7 @@ function renderEditor() {
       if (editor.setMenu === `${xi}:${si}`) {
         html += `<div class="setmenu" data-s="${si}">
           <div class="small"><b>Effort (RPE)</b> <span class="muted">· ${r.rpe != null ? `${r.rpe}: ${RPE_TEXT[r.rpe]}` : "how many more reps could you have done?"}</span></div>
-          <div class="chips">${RPES.map((v) => `<button class="chip${r.rpe === v ? " on" : ""}" data-act="rpe" data-v="${v}">${v}</button>`).join("")}</div>
+          <div class="chips wrapchips">${RPES.map((v) => `<button class="chip${r.rpe === v ? " on" : ""}" data-act="rpe" data-v="${v}">${v}</button>`).join("")}</div>
           <div class="ex-menu">
             ${r.rpe != null ? `<button class="secondary" data-act="rpe" data-v="">Clear RPE</button>` : ""}
             <button class="secondary danger" data-act="delset">Delete set</button>
@@ -446,12 +451,16 @@ async function saveEditor() {
 }
 
 // ---------- Exercise picker ----------
+// Used to add an exercise to a workout ({ kind: "add" }) or to choose a merge target
+// ({ kind: "merge", from }).
 
-function openPicker() {
+let pickerMode = { kind: "add" };
+function openPicker(mode = { kind: "add" }) {
+  pickerMode = mode;
   openOverlay("picker").innerHTML = `<div class="wrap">
     <div class="sheet-top">
       <button class="back" data-act="pkclose" aria-label="Back">‹</button>
-      <input class="pk-search" id="pksearch" placeholder="Search or create" autocomplete="off" enterkeyhint="search">
+      <input class="pk-search" id="pksearch" placeholder="${mode.kind === "merge" ? `Merge ${esc(exName(mode.from))} into…` : "Search or create"}" autocomplete="off" enterkeyhint="search">
       <span></span>
     </div>
     <div id="pklist" class="sheet-body" style="padding-top:4px"></div></div>`;
@@ -462,15 +471,15 @@ function openPicker() {
 function renderPicker() {
   const q = ($("pksearch")?.value || "").trim();
   const ql = q.toLowerCase();
-  const inWorkout = new Set(editor?.draft.exercises.map((x) => x.key));
-  const all = [...lib.values()].filter((x) => !x.hidden);
-  for (const s of sets) if (!lib.has(s.metric) && !all.some((x) => x.key === s.metric)) all.push(exerciseFor(lib, s.metric));
+  const merge = pickerMode.kind === "merge";
+  const blocked = merge ? new Set([pickerMode.from]) : new Set(editor?.draft.exercises.map((x) => x.key));
+  const all = allExercises().filter((x) => !x.hidden);
   const match = (x) => !ql || x.name.toLowerCase().includes(ql);
-  const item = (x) => `<button class="pkitem" data-key="${esc(x.key)}" ${inWorkout.has(x.key) ? "disabled" : ""}>
+  const item = (x) => `<button class="pkitem" data-key="${esc(x.key)}" ${blocked.has(x.key) ? "disabled" : ""}>
       <span>${esc(x.name)}</span><small>${esc(MUSCLES[x.primary] || "")}</small></button>`;
 
   let html = "";
-  if (q && !all.some((x) => x.name.toLowerCase() === ql)) {
+  if (!merge && q && !all.some((x) => x.name.toLowerCase() === ql)) {
     html += `<button class="pkitem create" data-create="${esc(q)}">+ Create “${esc(q)}”</button>`;
   }
   const recent = [...new Set(workouts.flatMap((w) => w.exercises.map((x) => x.key)))].slice(0, 8)
@@ -483,12 +492,17 @@ function renderPicker() {
 
 $("picker").addEventListener("click", async (ev) => {
   const b = ev.target.closest("button");
-  if (!b || !editor) return;
+  if (!b) return;
   if (b.dataset.act === "pkclose") { history.back(); return; }
+  if (pickerMode.kind === "merge") {
+    if (b.dataset.key) await mergeExercise(pickerMode.from, b.dataset.key);
+    return;
+  }
+  if (!editor) return;
   let key = b.dataset.key;
   if (b.dataset.create) {
     const name = b.dataset.create.trim().slice(0, 60);
-    key = newKey(name, new Set([...lib.keys(), ...sets.map((s) => s.metric)]));
+    key = newKey(name, new Set(allExercises().map((x) => x.key)));
     await cortex.putEntries([{ client_id: exerciseId(key), module: "lifting", metric: EXERCISE, data: { key, name, primary: null, secondary: [] } }]);
     lib.set(key, { key, name, equipment: null, primary: null, secondary: [], custom: true, hidden: false });
   }
@@ -500,6 +514,129 @@ $("picker").addEventListener("click", async (ev) => {
   history.back(); // closes the picker
   renderEditor();
   requestAnimationFrame(() => $("editor").scrollTo({ top: $("editor").scrollHeight }));
+});
+
+// ---------- Progress tab: overview ----------
+
+const RANGES = { "4w": ["4 weeks", 28], "3m": ["3 months", 91], "1y": ["1 year", 365], all: ["All time", null] };
+let range = "3m";
+let journeyOpen = false;
+const fmtBig = (n) => Math.round(n).toLocaleString();
+
+function renderProgress() {
+  const el = $("view-progress");
+  if (!sets.length) { el.innerHTML = `<p class="empty">Log a workout and your progress shows up here.</p>`; return; }
+  const t = totals(workouts);
+  const vol = convert(t.volumeKg, "kg", unit);
+  const ms = milestone(t.volumeKg);
+  const days = RANGES[range][1];
+  const fromIso = days ? new Date(Date.now() - days * 864e5).toISOString() : null;
+  const groups = groupSets(since(sets, fromIso), (k) => exerciseFor(lib, k));
+
+  // Most-trained exercises, with their best estimated 1RM.
+  const sessionsByKey = new Map();
+  for (const w of workouts) for (const x of w.exercises) if (x.sets.length) sessionsByKey.set(x.key, (sessionsByKey.get(x.key) || 0) + 1);
+  const top = [...sessionsByKey.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([key, n]) => {
+    const { best } = personalRecords(sets.filter((s) => s.metric === key));
+    return { key, n, best };
+  });
+
+  el.innerHTML = `
+    <div class="tiles">
+      <div class="tile"><div class="k">Workouts</div><div class="v">${t.workouts.toLocaleString()}</div></div>
+      <div class="tile"><div class="k">Total volume</div><div class="v">${fmtBig(vol)} <small>${unit}</small></div></div>
+      <div class="tile"><div class="k">PRs</div><div class="v">${prs.size.toLocaleString()}</div></div>
+      <div class="tile"><div class="k">Time training</div><div class="v">${t.minutes ? fmtDuration(t.minutes) : "—"}</div></div>
+    </div>
+    <div class="muted small" style="margin-top:8px">${t.sets.toLocaleString()} sets · ${t.reps.toLocaleString()} reps</div>
+
+    <div class="card milestone">
+      <div class="k">You've lifted</div>
+      <div class="v">${fmtBig(vol)} ${unit}</div>
+      ${ms.last ? `<div>That's <b>${fmtTimes(t.volumeKg / ms.last.kg)} × ${esc(ms.last.name)}</b> ${ms.last.icon}</div>` : ""}
+      ${ms.next ? `<div class="bar" role="progressbar" aria-valuenow="${Math.round(ms.progress * 100)}" aria-valuemin="0" aria-valuemax="100"><span style="width:${(ms.progress * 100).toFixed(1)}%"></span></div>
+        <div class="muted small">Next: ${ms.next.icon} ${esc(ms.next.name)} (${fmtBig(convert(ms.next.kg, "kg", unit))} ${unit}) · ${Math.floor(ms.progress * 100)}%</div>` : ""}
+      ${ms.journey.length ? `<button class="ghost" data-act="journey" style="padding:0;margin-top:6px">${journeyOpen ? "Hide" : "See"} your journey ›</button>` : ""}
+      ${journeyOpen ? `<ul class="list journey">${ms.journey.map((o) =>
+        `<li><span>${o.icon} ${esc(o.name)} <span class="muted small">${fmtBig(convert(o.kg, "kg", unit))} ${unit}</span></span><b>${fmtTimes(o.times)}×</b></li>`).join("")}</ul>` : ""}
+    </div>
+
+    <h2>Muscles worked</h2>
+    <div class="chips" role="group" aria-label="Time range">${Object.entries(RANGES).map(([k, [label]]) =>
+      `<button class="chip${k === range ? " on" : ""}" data-range="${k}">${label}</button>`).join("")}</div>
+    <div class="muted small">Sets per muscle group. Helper muscles count half a set (bench press: 1 chest, ½ arms, ½ shoulders).</div>
+    ${radarSvg(groups)}
+
+    <h2>Training split</h2>
+    ${splitHtml(groups)}
+
+    <h2>Top lifts</h2>
+    <ul class="list">${top.map((x) => `<li><button class="rowbtn" data-key="${esc(x.key)}">
+      <span>${esc(exName(x.key))}<br><span class="muted small">${x.n} session${x.n === 1 ? "" : "s"}</span></span>
+      <span>${x.best ? `${fmtW(x.best.e1rm)} ${unit}<br><span class="muted small">est. 1RM</span>` : ""}</span></button></li>`).join("")}</ul>`;
+}
+
+// 2.2 -> "2.2", 1234.5 -> "1,235", 0.4 -> "0.4"
+const fmtTimes = (n) => (n >= 100 ? fmtBig(n) : fmtNum(Math.round(n * 10) / 10));
+
+// Radar chart: one axis per group, rings at 25/50/75/100% of the busiest group.
+function radarSvg(groups) {
+  const vals = GROUPS.map((g) => groups[g]);
+  const max = Math.max(...vals);
+  if (!max) return `<p class="empty">No sets in this range.</p>`;
+  const W = 380, H = 290, cx = W / 2, cy = H / 2 + 4, R = 90; // wide enough for side labels
+  const pt = (i, f) => {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / GROUPS.length;
+    return [cx + Math.cos(a) * R * f, cy + Math.sin(a) * R * f];
+  };
+  const ring = (f) => GROUPS.map((_, i) => pt(i, f).map((n) => n.toFixed(1)).join(",")).join(" ");
+  const shape = vals.map((v, i) => pt(i, v / max).map((n) => n.toFixed(1)).join(",")).join(" ");
+  const labels = GROUPS.map((g, i) => {
+    const [x, y] = pt(i, 1.28);
+    const anchor = Math.abs(x - cx) < 4 ? "middle" : x > cx ? "start" : "end";
+    return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" class="rl">${GROUP_LABEL[g]}</text>
+      <text x="${x.toFixed(1)}" y="${(y + 15).toFixed(1)}" text-anchor="${anchor}" class="rv">${fmtNum(groups[g])}</text>`;
+  }).join("");
+  return `<div class="radar"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Sets per muscle group: ${GROUPS.map((g) => `${GROUP_LABEL[g]} ${fmtNum(groups[g])}`).join(", ")}">
+    ${[0.25, 0.5, 0.75, 1].map((f) => `<polygon points="${ring(f)}" fill="none" stroke="var(--grid)" stroke-width="1"/>`).join("")}
+    ${GROUPS.map((_, i) => { const [x, y] = pt(i, 1); return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--grid)" stroke-width="1"/>`; }).join("")}
+    <polygon points="${shape}" fill="rgb(79 156 255 / .22)" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
+    ${vals.map((v, i) => { const [x, y] = pt(i, v / max); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="var(--accent)" stroke="var(--bg)" stroke-width="2"/>`; }).join("")}
+    ${labels}
+  </svg></div>`;
+}
+
+// Donut of each group's share of sets, with a legend that carries names and numbers
+// (colour is never the only cue).
+function splitHtml(groups) {
+  const total = GROUPS.reduce((n, g) => n + groups[g], 0);
+  if (!total) return `<p class="empty">No sets in this range.</p>`;
+  const R = 70, C = 2 * Math.PI * R;
+  let offset = 0;
+  const arcs = GROUPS.filter((g) => groups[g] > 0).map((g) => {
+    const len = (groups[g] / total) * C;
+    const arc = `<circle r="${R}" cx="90" cy="90" fill="none" stroke="var(--g-${g})" stroke-width="26"
+      stroke-dasharray="${Math.max(0, len - 2).toFixed(2)} ${(C - Math.max(0, len - 2)).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}"/>`;
+    offset += len;
+    return arc;
+  }).join("");
+  return `<div class="split">
+    <svg viewBox="0 0 180 180" role="img" aria-label="Training split">
+      <g transform="rotate(-90 90 90)">${arcs}</g>
+      <text x="90" y="88" text-anchor="middle" class="sv">${fmtNum(total)}</text>
+      <text x="90" y="106" text-anchor="middle" class="sk">sets</text>
+    </svg>
+    <ul class="legend">${GROUPS.map((g) => `<li><i style="background:var(--g-${g})"></i>${GROUP_LABEL[g]}
+      <span>${Math.round((groups[g] / total) * 100)}%</span></li>`).join("")}</ul>
+  </div>`;
+}
+
+$("view-progress").addEventListener("click", (ev) => {
+  const r = ev.target.closest("[data-range]")?.dataset.range;
+  if (r) { range = r; renderProgress(); return; }
+  if (ev.target.closest("[data-act=journey]")) { journeyOpen = !journeyOpen; renderProgress(); return; }
+  const k = ev.target.closest("[data-key]")?.dataset.key;
+  if (k) openExercise(k);
 });
 
 // ---------- Exercise detail (Progress tab, and the screen behind an exercise's name) ----------
@@ -550,7 +687,7 @@ function renderExerciseInto(el, key) {
       return `<div class="card hist">
         <div class="head"><b>${esc(w.name)}</b><span class="muted small">${esc(fmtDate(w.start))}</span></div>
         ${x.notes ? `<div class="notes">${esc(x.notes)}</div>` : ""}
-        ${x.sets.map((st, i) => `<div class="line"><span class="muted">${i + 1}</span><span>${esc(setText(st))}</span></div>`).join("")}
+        ${x.sets.map((st, i) => `<div class="line"><span class="muted">${prs.has(st.client_id) ? "🏆" : i + 1}</span><span>${esc(setText(st))}</span></div>`).join("")}
       </div>`;
     }).join("")}`;
 
@@ -561,45 +698,27 @@ function renderExerciseInto(el, key) {
   drawChart(el.querySelector(".chart"), points);
 }
 
-function renderProgress() {
-  const keys = [...new Set(sets.slice().sort((a, b) => (a.recorded_at < b.recorded_at ? 1 : -1)).map((s) => s.metric))];
-  if (!keys.includes(progressKey)) progressKey = keys[0] ?? null;
-  $("pchips").innerHTML = keys.map((k) =>
-    `<button class="chip${k === progressKey ? " on" : ""}" data-k="${esc(k)}">${esc(exName(k))}</button>`).join("");
-  if (!progressKey) {
-    $("pbody").innerHTML = `<p class="empty">Log a workout and your progress shows up here.</p>`;
-    return;
-  }
-  renderExerciseInto($("pbody"), progressKey);
-}
-
-$("pchips").addEventListener("click", (ev) => {
-  const k = ev.target.closest("[data-k]")?.dataset.k;
-  if (k) { progressKey = k; renderProgress(); }
-});
-
 let exsheetKey = null;
 function openExercise(key) {
   exsheetKey = key;
   openOverlay("exercise").innerHTML = `<div class="wrap">
     <div class="sheet-top">
       <button class="back" data-act="close" aria-label="Back">‹</button>
-      <div class="title">${esc(exName(key))}</div><span></span>
+      <div class="title" id="extitle">${esc(exName(key))}</div>
+      <button class="ghost" data-act="editex">Edit</button>
     </div>
     <div class="sheet-body" id="exbody"></div></div>`;
   renderExerciseInto($("exbody"), key);
 }
 
-// Chart chips and the back button work the same in both places.
-for (const id of ["pbody", "exsheet"]) {
-  $(id).addEventListener("click", (ev) => {
-    if (ev.target.closest("[data-act=close]")) { history.back(); return; }
-    const m = ev.target.closest("[data-metric]")?.dataset.metric;
-    if (!m) return;
-    chartMetric = m;
-    if (id === "pbody") renderProgress(); else renderExerciseInto($("exbody"), exsheetKey);
-  });
-}
+$("exsheet").addEventListener("click", (ev) => {
+  if (ev.target.closest("[data-act=close]")) { history.back(); return; }
+  if (ev.target.closest("[data-act=editex]")) { openExerciseEdit(exsheetKey); return; }
+  const m = ev.target.closest("[data-metric]")?.dataset.metric;
+  if (!m) return;
+  chartMetric = m;
+  renderExerciseInto($("exbody"), exsheetKey);
+});
 
 // Hand-drawn SVG line chart (DESIGN D19): one point per session, x = real time.
 // points: [{ day: "YYYY-MM-DD", v: number in display unit, sub: extra tooltip text }]
@@ -664,33 +783,151 @@ addEventListener("resize", () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     if (!$("exsheet").hidden && exsheetKey) renderExerciseInto($("exbody"), exsheetKey);
-    else if (tab === "progress") renderProgress();
   }, 150);
 });
 
-// ---------- Exercises tab (browse for now; creating and editing comes next) ----------
+// ---------- Exercises tab: browse, filter by muscle, create, edit, merge ----------
+
+let exFilter = "all";     // muscle key or "all"
+let exQuery = "";
+let showHidden = false;
+const EQUIPMENT = ["barbell", "dumbbell", "machine", "cable", "bodyweight", "other"];
+
+function allExercises() {
+  const list = [...lib.values()];
+  for (const s of sets) if (!lib.has(s.metric) && !list.some((x) => x.key === s.metric)) list.push(exerciseFor(lib, s.metric));
+  return list;
+}
 
 function renderExercises() {
   const counts = new Map();
   for (const s of sets) counts.set(s.metric, (counts.get(s.metric) || 0) + 1);
-  const all = [...lib.values()].filter((x) => !x.hidden);
-  for (const k of counts.keys()) if (!lib.has(k)) all.push(exerciseFor(lib, k));
+  const q = exQuery.trim().toLowerCase();
+  const list = allExercises().filter((x) =>
+    (showHidden || !x.hidden) && (exFilter === "all" || x.primary === exFilter || (x.secondary || []).includes(exFilter))
+    && (!q || x.name.toLowerCase().includes(q)));
+  const hiddenCount = [...lib.values()].filter((x) => x.hidden).length;
   const groups = new Map([...Object.keys(MUSCLES), "other"].map((m) => [m, []]));
-  for (const x of all) groups.get(MUSCLES[x.primary] ? x.primary : "other").push(x);
-  let html = `<p class="muted small">Creating, editing and merging exercises comes next. You can already create one from the “Add exercise” search while logging.</p>`;
-  for (const [m, list] of groups) {
-    if (!list.length) continue;
-    html += `<h2>${esc(MUSCLES[m] || "Other")}</h2><ul class="list">` + list.sort((a, b) => a.name.localeCompare(b.name)).map((x) =>
-      `<li><button class="rowbtn" data-key="${esc(x.key)}"><span>${esc(x.name)}${x.custom ? ` <span class="muted small">· yours</span>` : ""}</span><span class="muted small">${counts.get(x.key) ? `${counts.get(x.key)} sets` : esc(x.equipment || "")}</span></button></li>`
+  for (const x of list) groups.get(MUSCLES[x.primary] ? x.primary : "other").push(x);
+
+  let html = `<div class="exbar">
+      <input id="exsearch" placeholder="Search exercises" value="${esc(exQuery)}" autocomplete="off" enterkeyhint="search">
+      <button class="primary sm" data-act="newex">+ New</button>
+    </div>
+    <div class="chips">${[["all", "All"], ...Object.entries(MUSCLES)].map(([k, label]) =>
+      `<button class="chip${k === exFilter ? " on" : ""}" data-filter="${k}">${label}</button>`).join("")}</div>`;
+  for (const [m, items] of groups) {
+    if (!items.length) continue;
+    html += `<h2>${esc(MUSCLES[m] || "No muscle set")}</h2><ul class="list">` + items.sort((a, b) => a.name.localeCompare(b.name)).map((x) =>
+      `<li><button class="rowbtn" data-key="${esc(x.key)}">
+        <span>${esc(x.name)}${x.custom ? ` <span class="muted small">· yours</span>` : ""}${x.hidden ? ` <span class="muted small">· hidden</span>` : ""}</span>
+        <span class="muted small">${counts.get(x.key) ? `${counts.get(x.key)} sets` : esc(x.equipment || "")}</span></button></li>`
     ).join("") + `</ul>`;
   }
+  if (!list.length) html += `<p class="empty">No exercises match.</p>`;
+  if (hiddenCount) html += `<div style="margin-top:18px"><button class="ghost" data-act="hidden">${showHidden ? "Hide" : "Show"} hidden exercises (${hiddenCount})</button></div>`;
   $("view-exercises").innerHTML = html;
+  const input = $("exsearch");
+  input.addEventListener("input", () => {
+    exQuery = input.value;
+    const pos = input.selectionStart;
+    renderExercises();
+    const again = $("exsearch");
+    again.focus();
+    again.setSelectionRange(pos, pos);
+  });
 }
 
 $("view-exercises").addEventListener("click", (ev) => {
-  const k = ev.target.closest("[data-key]")?.dataset.key;
-  if (k) openExercise(k);
+  const b = ev.target.closest("button");
+  if (!b) return;
+  if (b.dataset.filter) { exFilter = b.dataset.filter; renderExercises(); }
+  else if (b.dataset.act === "newex") openExerciseEdit(null);
+  else if (b.dataset.act === "hidden") { showHidden = !showHidden; renderExercises(); }
+  else if (b.dataset.key) openExercise(b.dataset.key);
 });
+
+// Edit form. `key` null = new exercise.
+let exEdit = null; // { key, name, equipment, primary, secondary:Set, hidden }
+function openExerciseEdit(key) {
+  const x = key ? exerciseFor(lib, key) : null;
+  exEdit = {
+    key, name: x?.name || exQuery.trim(), equipment: x?.equipment || null, primary: x?.primary || null,
+    secondary: new Set(x?.secondary || []), hidden: !!x?.hidden, builtin: !!x && !x.custom,
+  };
+  openOverlay("exedit");
+  renderExerciseEdit();
+}
+
+function renderExerciseEdit() {
+  const e = exEdit;
+  const muscleChips = (attr, isOn) => Object.entries(MUSCLES).map(([k, label]) =>
+    `<button class="chip${isOn(k) ? " on" : ""}" data-${attr}="${k}">${label}</button>`).join("");
+  $("exedit").innerHTML = `<div class="wrap">
+    <div class="sheet-top">
+      <button class="back" data-act="close" aria-label="Back">‹</button>
+      <div class="title">${e.key ? "Edit exercise" : "New exercise"}</div>
+      <button class="primary sm" data-act="saveex">Save</button>
+    </div>
+    <div class="sheet-body">
+      <label class="lbl">Name<input id="exname" value="${esc(e.name)}" autocomplete="off"></label>
+      <div class="lbl">Equipment</div>
+      <div class="chips wrapchips">${EQUIPMENT.map((q) => `<button class="chip${e.equipment === q ? " on" : ""}" data-eq="${q}">${q[0].toUpperCase() + q.slice(1)}</button>`).join("")}</div>
+      <div class="lbl">Main muscle <span class="muted">· counts 1 set</span></div>
+      <div class="chips wrapchips">${muscleChips("primary", (k) => e.primary === k)}</div>
+      <div class="lbl">Helper muscles <span class="muted">· count ½ set each</span></div>
+      <div class="chips wrapchips">${muscleChips("secondary", (k) => e.secondary.has(k))}</div>
+      ${e.key ? `<h2>More</h2>
+        <div class="stack">
+          <button class="secondary" data-act="mergeex">Merge into another exercise…</button>
+          <button class="secondary" data-act="hideex">${e.hidden ? "Unhide" : "Hide"} this exercise</button>
+        </div>
+        <p class="muted small">Merging moves every set of this exercise into the other one, for duplicates like “Bench” and “Bench Press”. Hiding keeps its history but removes it from the lists.</p>` : ""}
+    </div></div>`;
+}
+
+async function saveExercise(extra = {}) {
+  const e = exEdit;
+  const name = ($("exname")?.value ?? e.name).trim().slice(0, 60);
+  if (!name) { toast("Give it a name"); return false; }
+  const key = e.key || newKey(name, new Set(allExercises().map((x) => x.key)));
+  await cortex.putEntries([{
+    client_id: exerciseId(key), module: "lifting", metric: EXERCISE,
+    data: { key, name, equipment: e.equipment, primary: e.primary, secondary: [...e.secondary].filter((m) => m !== e.primary), hidden: e.hidden, ...extra },
+  }]);
+  e.key = key;
+  return true;
+}
+
+$("exedit").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("button");
+  if (!b || !exEdit) return;
+  if (exEdit && $("exname")) exEdit.name = $("exname").value;
+  const d = b.dataset;
+  if (d.act === "close") { history.back(); return; }
+  if (d.eq) exEdit.equipment = exEdit.equipment === d.eq ? null : d.eq;
+  else if (d.primary) { exEdit.primary = exEdit.primary === d.primary ? null : d.primary; exEdit.secondary.delete(d.primary); }
+  else if (d.secondary) { exEdit.secondary.has(d.secondary) ? exEdit.secondary.delete(d.secondary) : exEdit.secondary.add(d.secondary); }
+  else if (d.act === "hideex") exEdit.hidden = !exEdit.hidden;
+  else if (d.act === "saveex") {
+    if (await saveExercise()) { history.back(); toast("Exercise saved"); }
+    return;
+  } else if (d.act === "mergeex") { openPicker({ kind: "merge", from: exEdit.key }); return; }
+  renderExerciseEdit();
+});
+
+async function mergeExercise(from, to) {
+  if (!confirm(`Merge “${exName(from)}” into “${exName(to)}”? All its sets become ${exName(to)} sets, and “${exName(from)}” gets hidden.`)) return;
+  const x = exerciseFor(lib, from);
+  await cortex.putEntries([
+    ...mergePlan(entries, from, to),
+    { client_id: exerciseId(from), module: "lifting", metric: EXERCISE,
+      data: { key: from, name: x.name, equipment: x.equipment, primary: x.primary, secondary: x.secondary, hidden: true, merged_into: to } },
+  ]);
+  exsheetKey = to;
+  history.go(-2); // close the picker and the edit form; the exercise screen now shows the target
+  toast(`Merged into ${exName(to)}`);
+}
 
 // ---------- Profile tab + settings screen ----------
 
@@ -751,9 +988,13 @@ async function refresh() {
   sets = entries.filter(isSet);
   workouts = groupWorkouts(entries);
   lib = resolveExercises(entries.filter((e) => e.metric === EXERCISE));
+  prs = prEvents(sets);
   if (!editor) render();
   if (!$("picker").hidden) renderPicker();
-  if (!$("exsheet").hidden && exsheetKey) renderExerciseInto($("exbody"), exsheetKey);
+  if (!$("exsheet").hidden && exsheetKey) {
+    $("extitle").textContent = exName(exsheetKey);
+    renderExerciseInto($("exbody"), exsheetKey);
+  }
   await showSync();
 }
 

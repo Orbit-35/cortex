@@ -171,7 +171,32 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 ### D30. One exercise view, reused
 - **Decision:** the screen behind an exercise's name (from a workout, or the Exercises tab) and the Progress tab render the same view: a per-session chart switchable between est. 1RM, heaviest weight and session volume, records, rep records and the full history of that exercise.
 - **Why:** one piece of code, consistent everywhere. Per-session points (not per set) keep the chart readable; the per-set detail is in the history list right below.
-- **Trade-off:** the Progress tab is a per-exercise view until the overview (step 2) replaces it.
+- **Trade-off:** none left: the Progress tab became the overview (D31) and links into this view from "Top lifts".
+
+### D31. Progress overview: lifetime totals, milestones, muscle balance
+- **Decision:** the Progress tab shows lifetime tiles (workouts, volume, PRs, time training), a volume milestone against real-world objects with a "journey" list, a radar chart and a donut of sets per muscle group (range: 4 weeks / 3 months / 1 year / all), and top lifts (most-trained exercises with best est. 1RM). The maths is in `static/lifting/progress.js`, tested.
+- **Why:** answers "where do I stand" at a glance. Radar shows balance (shape), the donut shows share (%), which is why both exist.
+- **Trade-off:** lifetime numbers only count what's in Cortex (see the Stronger baseline idea, on hold).
+
+### D32. Six muscle groups for charts; a set credits each group at most once
+- **Decision:** the 13 tagged muscles roll up into Chest, Back (incl. lower back, traps), Shoulders, Arms (biceps, triceps, forearms), Legs (quads, hamstrings, glutes, calves), Core. Per set, a group gets 1 if it holds the primary muscle, else 0.5 if it holds any secondary, never more than 1.
+- **Why:** six axes keep a radar and a donut readable (more slices stop being comparable). Capping per group stops e.g. a deadlift counting glutes ½ + hamstrings ½ as a full extra leg set.
+- **Trade-off:** finer detail (e.g. biceps vs triceps) isn't shown yet; the data supports it later.
+
+### D33. A PR is counted when it happened
+- **Decision:** a set counts as a PR if, at the moment it was done, it beat every earlier set of that exercise by est. 1RM or by weight at that rep count (same rule as the live 🏆, D18/`prKind`). The first-ever set of an exercise is not a PR. Recomputed from history on every load, never stored.
+- **Why:** stays correct after edits, deletes and merges, and old PRs that were later beaten still count.
+- **Trade-off:** cost grows with history (fine for thousands of sets; cache it if it ever gets slow).
+
+### D34. Volume milestones use rough, commonly cited weights
+- **Decision:** a fixed list of ~20 objects from a Labrador (30 kg) to the Great Pyramid in `progress.js`, with our own selection and wording.
+- **Why:** fun, and only needs to be roughly right.
+- **Trade-off:** the figures are approximate; changing the list changes everyone's "next milestone".
+
+### D35. Exercises can be edited, hidden and merged, never hard-deleted
+- **Decision:** edits write an `_exercise` override (D23). Hiding sets `hidden` (history stays, lists skip it). Merging moves every set of A to B (renumbering where a workout had both), rewrites workouts' exercise lists, and hides A with `merged_into`.
+- **Why:** history is the point of the app, so nothing that has sets can vanish. Merge fixes duplicates without retyping.
+- **Trade-off:** a merge rewrites many entries at once (one sync batch). A workout open in the editor during a merge keeps the old key until reopened.
 
 ## Security and hosting
 
