@@ -14,6 +14,11 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const LIVE_KEY = "cortex.lifting.live";
 const RPES = [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
+// What each effort rating means, in reps left in the tank.
+const RPE_TEXT = {
+  10: "Max effort: no reps left", 9.5: "Maybe 1 more rep", 9: "1 more rep left", 8.5: "Maybe 2 more reps",
+  8: "2 more reps left", 7.5: "Maybe 3 more reps", 7: "3 more reps left", 6.5: "Maybe 4 more reps", 6: "4+ reps left: easy",
+};
 const TABS = { log: "Log", progress: "Progress", exercises: "Exercises", body: "Bodyweight", profile: "Profile" };
 
 // ---------- State ----------
@@ -292,7 +297,7 @@ function renderEditor() {
       </div>`;
       if (editor.setMenu === `${xi}:${si}`) {
         html += `<div class="setmenu" data-s="${si}">
-          <div class="small muted">Effort (RPE): 10 = nothing left · 9 = 1 more rep in the tank · 8 = 2 more…</div>
+          <div class="small"><b>Effort (RPE)</b> <span class="muted">· ${r.rpe != null ? `${r.rpe}: ${RPE_TEXT[r.rpe]}` : "how many more reps could you have done?"}</span></div>
           <div class="chips">${RPES.map((v) => `<button class="chip${r.rpe === v ? " on" : ""}" data-act="rpe" data-v="${v}">${v}</button>`).join("")}</div>
           <div class="ex-menu">
             ${r.rpe != null ? `<button class="secondary" data-act="rpe" data-v="">Clear RPE</button>` : ""}
@@ -358,7 +363,6 @@ $("editor").addEventListener("click", async (ev) => {
     }
     case "rpe":
       ex.sets[si].rpe = b.dataset.v === "" ? null : Number(b.dataset.v);
-      editor.setMenu = null;
       break;
     case "delset":
       ex.sets.splice(si, 1);
