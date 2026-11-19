@@ -59,6 +59,17 @@ Control audio precisely, track listening, and protect hearing.
 - **Song lists:** songs you can play, songs you're learning (with progress, notes, tabs/links), and a wishlist, linked to **Spotify** playlists. *How:* Spotify's API (log in once with your account) can create and read playlists, so "Can play" and "Learning" could be real playlists you listen to.
 - **Practice log:** minutes practised, what you worked on, streaks. Same pattern as workouts.
 
+## Media (needs more thought)
+
+- **Media inbox / manager:** a dashboard of new clips and voice memos. Sorting stays manual, but fast: see what's new, preview, rename, then move to a folder or make a new one with a tap or two, instead of digging through the file manager.
+  - *How:* on Android it needs the native app to read and move files in the gallery and recordings. On the PC, Chrome and Edge can work with a chosen folder directly (File System Access API), so a PC version could come first. Also needs a decision on whether files stay on each device or go through the server (storage size matters for video).
+  - *Open questions:* which folders it watches, whether files sync between devices or only get sorted where they are, and naming rules (e.g. date + tag).
+- **Quick video trimmer (maybe):** cut the start/end or a middle section and save a smaller file.
+  - *How:* ffmpeg. "Trim without re-encoding" is near-instant and lossless but cuts at the nearest keyframe (can be off by up to a second or two). "Re-encode" cuts exactly and can shrink the file (lower resolution/bitrate) but takes longer. Can run on the PC/server; on the phone it needs the native app.
+- **YouTube → MP3/MP4, no ads:** paste a link, pick audio or video and quality, get the file. Runs on your own server, so no shady sites.
+  - *How:* `yt-dlp` (the widely used open-source downloader) plus ffmpeg for converting, called by the server; the file appears in Cortex to save. Works from the phone's share menu ("Share → Cortex" on a YouTube link).
+  - *Note:* YouTube's terms only allow downloading where YouTube offers it or you have rights to the content (your own uploads, Creative Commons, etc.), so treat it as a personal tool for that. It also needs `yt-dlp` updated now and then, as YouTube changes often break it.
+
 ## Earlier roadmap ideas
 
 - **Body/food:** meals, calories/protein, maybe barcode lookup.
