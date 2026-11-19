@@ -4,7 +4,8 @@
 //   workout  metric "_workout", recorded_at = start time,
 //            data { name, notes, duration_min, exercises: [{ key, notes }] }  (order of exercises)
 //   set      metric = exercise key, value = weight as typed, unit "lb"|"kg",
-//            data { reps, set (number within its exercise), workout (workout client_id) }
+//            data { reps, set (number within its exercise), workout (workout client_id),
+//                   rpe (perceived effort 6-10 in 0.5 steps, or null) }
 //
 // Editing works on a "draft": a plain copy of a workout that the screen changes freely.
 // Saving turns the draft back into entries (commitPlan), so a whole workout is saved
@@ -106,7 +107,7 @@ export function newDraft({ id, mode, unit, start, name, duration_min = null }) {
   return { id, mode, unit, start, name, notes: "", duration_min, exercises: [] };
 }
 
-export const blankRow = (id) => ({ id, weight: "", reps: "", done: false, at: null });
+export const blankRow = (id) => ({ id, weight: "", reps: "", rpe: null, done: false, at: null });
 
 // A saved workout as an editable draft. `orig` remembers each set as saved, so
 // untouched sets are written back exactly as they were (including their unit).
@@ -118,7 +119,7 @@ export function draftFromWorkout(w, unit) {
       key: x.key, notes: x.notes,
       sets: x.sets.map((s) => ({
         id: s.client_id, weight: showWeight(s.value, s.unit, unit), reps: String(s.data?.reps ?? ""),
-        done: true, at: s.recorded_at,
+        rpe: s.data?.rpe ?? null, done: true, at: s.recorded_at,
       })),
     })),
   };
@@ -160,7 +161,7 @@ export function commitPlan(draft, original, now = new Date()) {
         unit: untouched ? orig.unit : draft.unit,
         recorded_at: orig ? new Date(new Date(orig.recorded_at).getTime() + shift).toISOString()
           : draft.mode === "live" ? (r.at || nowIso) : draft.start,
-        data: { ...(orig?.data || {}), reps: validReps(r.reps), set: i + 1, workout: draft.id },
+        data: { ...(orig?.data || {}), reps: validReps(r.reps), set: i + 1, workout: draft.id, rpe: r.rpe ?? null },
         deleted_at: null,
       });
     });

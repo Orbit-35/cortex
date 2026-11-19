@@ -49,7 +49,7 @@ assert.equal(previousSets(grouped, "bench_press", at(1, 0)).length, 0);
 // ---- live workout: only ticked sets are saved, numbered 1..n ----
 const live = newDraft({ id: "w1", mode: "live", unit: "lb", start: at(10, 18), name: "Push" });
 live.exercises.push({ key: "bench_press", notes: "felt good", sets: [
-  { ...blankRow("s1"), weight: "225", reps: "5", done: true, at: at(10, 18) },
+  { ...blankRow("s1"), weight: "225", reps: "5", rpe: 8.5, done: true, at: at(10, 18) },
   { ...blankRow("s2"), weight: "225", reps: "", done: false },
   { ...blankRow("s3"), weight: "230.5", reps: "3", done: true, at: at(10, 19) },
 ] });
@@ -59,7 +59,7 @@ assert.equal(saved[0].metric, WORKOUT);
 assert.equal(saved[0].data.duration_min, 90);
 assert.deepEqual(saved[0].data.exercises, [{ key: "bench_press", notes: "felt good" }]); // dip had nothing done
 const setsOut = saved.slice(1);
-assert.deepEqual(setsOut.map((s) => [s.client_id, s.value, s.unit, s.data.set]), [["s1", 225, "lb", 1], ["s3", 230.5, "lb", 2]]);
+assert.deepEqual(setsOut.map((s) => [s.client_id, s.value, s.unit, s.data.set, s.data.rpe]), [["s1", 225, "lb", 1, 8.5], ["s3", 230.5, "lb", 2, null]]);
 
 // ---- edit: untouched sets keep their unit, edits take the draft unit, removed sets are deleted, date moves sets ----
 const db = [...saved, S("k1", "squat", 100, 5, at(10, 19), { workout: "w1", set: 1 })];
@@ -67,6 +67,7 @@ db[0] = { ...db[0], data: { ...db[0].data, exercises: [...db[0].data.exercises, 
 const w = groupWorkouts(db)[0];
 const d = draftFromWorkout(w, "lb");
 assert.equal(d.exercises[1].sets[0].weight, "220.5");         // 100 kg shown in lb
+assert.equal(d.exercises[0].sets[0].rpe, 8.5);                // RPE survives the round trip
 d.exercises[0].sets[0].reps = "6";                            // touch reps only
 d.exercises[0].sets.splice(1, 1);                             // remove 230.5×3
 d.start = at(11, 18);                                         // move to the next day

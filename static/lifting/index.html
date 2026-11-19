@@ -117,7 +117,18 @@
 
   .ex { margin-top: 22px; }
   .ex-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .ex-head .exname { color: var(--accent); font-weight: 700; font-size: 18px; }
+  .ex-head .exname { color: var(--accent); font-weight: 700; font-size: 18px; background: none; border: 0; padding: 8px 0; text-align: left; }
+  .setno small { display: block; font-size: 11px; font-weight: 600; color: var(--warn); line-height: 1; }
+  .setmenu { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin: 4px 0 6px; }
+  .setmenu .chip { min-width: 48px; }
+  .hist { margin-top: 10px; }
+  .hist .head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .hist .line { display: flex; justify-content: space-between; padding: 3px 0; font-variant-numeric: tabular-nums; }
+  .hist .notes { font-size: 14px; color: var(--muted); white-space: pre-wrap; margin-bottom: 6px; }
+  .rowbtn { width: 100%; display: flex; justify-content: space-between; gap: 12px; background: none; border: 0; padding: 0; text-align: left; min-height: 28px; }
+  .topright { display: flex; align-items: center; gap: 8px; }
+  .gear { background: none; border: 0; width: 44px; height: 44px; display: grid; place-items: center; color: var(--text); }
+  .gear svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .ex-menu { display: flex; gap: 8px; margin: 6px 0; }
   .ex-menu button { flex: 1; }
   .ex textarea { margin: 6px 0; }
@@ -194,7 +205,10 @@
 <div class="wrap">
   <div class="top">
     <h1 id="title">Log</h1>
-    <div class="sync" id="sync" role="status"></div>
+    <div class="topright">
+      <div class="sync" id="sync" role="status"></div>
+      <button class="gear" id="gear" aria-label="Settings" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></button>
+    </div>
   </div>
 
   <main id="view-log"></main>
@@ -223,6 +237,8 @@
 
 <section class="sheet" id="editor" hidden aria-label="Workout"></section>
 <section class="sheet" id="picker" hidden aria-label="Choose exercise"></section>
+<section class="sheet" id="exsheet" hidden aria-label="Exercise"></section>
+<section class="sheet" id="settings" hidden aria-label="Settings"></section>
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script type="module" src="/lifting/app.js"></script>

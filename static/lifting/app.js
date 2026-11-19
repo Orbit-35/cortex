@@ -2,7 +2,7 @@
 // All data goes through the Cortex core (saved on this device first, synced in the
 // background). The maths and data shaping live in the pure modules imported below.
 import * as cortex from "/core/cortex.js";
-import { e1rm, dayKey, bestPerDay, personalRecords, prKind } from "/lifting/stats.js";
+import { e1rm, dayKey, personalRecords, prKind, sessionSeries } from "/lifting/stats.js";
 import { convert, showWeight, parseWeight, fmtNum } from "/lifting/units.js";
 import { MUSCLES, resolveExercises, exerciseFor, exerciseId, newKey } from "/lifting/library.js";
 import {
@@ -13,6 +13,7 @@ import {
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const LIVE_KEY = "cortex.lifting.live";
+const RPES = [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
 const TABS = { log: "Log", progress: "Progress", exercises: "Exercises", body: "Bodyweight", profile: "Profile" };
 
 // ---------- State ----------
@@ -24,6 +25,7 @@ let unit = "lb";         // display unit (setting)
 let tab = "log";
 let historyShown = 40;
 let progressKey = null;
+let chartMetric = "e1rm"; // which line the exercise charts show: e1rm | heaviest | volume
 let editor = null;       // { draft, original, dirty, menus:Set, notes:Set }
 
 // ---------- Small helpers ----------
@@ -71,6 +73,7 @@ function showTab(name) {
   for (const t of Object.keys(TABS)) $(`view-${t}`).hidden = t !== tab;
   document.querySelectorAll("nav.tabbar button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
   $("title").textContent = TABS[tab];
+  $("gear").hidden = tab !== "profile";
   render();
 }
 document.querySelector("nav.tabbar").addEventListener("click", (ev) => {
@@ -98,7 +101,8 @@ function bestSet(list) {
   }
   return best?.s;
 }
-const setText = (s) => (s.value ? `${showWeight(s.value, s.unit, unit)} × ${s.data?.reps}` : `${s.data?.reps} reps`);
+const setText = (s) => (s.value ? `${showWeight(s.value, s.unit, unit)} × ${s.data?.reps}` : `${s.data?.reps} reps`)
+  + (s.data?.rpe != null ? ` @${s.data.rpe}` : "");
 
 function renderLog() {
   const live = loadLive();
@@ -169,7 +173,7 @@ function editWorkout(id) {
 // The editor is its own browser-history step, so the phone's back button closes it.
 function openEditor(draft, original) {
   if (!draft) return;
-  editor = { draft, original, dirty: false, menus: new Set(), notes: new Set() };
+  editor = { draft, original, dirty: false, menus: new Set(), notes: new Set(), setMenu: null };
   history.pushState({ ui: "editor" }, "", location.hash);
   $("editor").hidden = false;
   $("editor").scrollTop = 0;
@@ -185,10 +189,23 @@ function closeEditor() {
   render();
 }
 
+// Overlay screens that sit on top of everything (including the editor). Each is one
+// browser-history step, so the phone's back button closes the top one.
+const OVERLAYS = { picker: "picker", exercise: "exsheet", settings: "settings" };
+function openOverlay(ui) {
+  history.pushState({ ui }, "", location.hash);
+  const el = $(OVERLAYS[ui]);
+  el.hidden = false;
+  el.scrollTop = 0;
+  document.body.style.overflow = "hidden";
+  return el;
+}
+
 addEventListener("popstate", (ev) => {
   const ui = ev.state?.ui;
-  if (!$("picker").hidden && ui !== "picker") $("picker").hidden = true;
-  if (editor && ui !== "editor" && ui !== "picker") {
+  for (const [name, id] of Object.entries(OVERLAYS)) if (ui !== name) $(id).hidden = true;
+  if (!editor && !ui) document.body.style.overflow = "";
+  if (editor && !ui) {
     // A live workout is safe in storage; an edit with unsaved changes asks first.
     if (editor.dirty && editor.draft.mode !== "live" && !confirm("Discard your changes?")) {
       history.pushState({ ui: "editor" }, "", location.hash);
@@ -251,7 +268,7 @@ function renderEditor() {
     const showNotes = ex.notes || editor.notes.has(xi);
     html += `<section class="ex" data-x="${xi}">
       <div class="ex-head">
-        <span class="exname">${esc(exName(ex.key))}</span>
+        <button class="exname" data-act="exinfo">${esc(exName(ex.key))}</button>
         <button class="ghost" data-act="exmenu" aria-label="Exercise options">•••</button>
       </div>
       ${editor.menus.has(xi) ? `<div class="ex-menu">
@@ -267,12 +284,21 @@ function renderEditor() {
       const hint = live ? hintFor(xi, si) : { weight: "", reps: "" };
       const p = prev[si];
       html += `<div class="grid setrow ${live ? "live" : "edit"}${r.done && live ? " done" : ""}" data-s="${si}">
-        <button class="setno" data-act="delset" aria-label="Set ${si + 1} options">${r.pr ? "🏆" : si + 1}</button>
+        <button class="setno" data-act="setmenu" aria-label="Set ${si + 1} options">${r.pr ? "🏆" : si + 1}${r.rpe != null ? `<small>@${r.rpe}</small>` : ""}</button>
         <button class="prev" data-act="useprev" ${p ? "" : "disabled"}>${p ? esc(setText(p)) : "—"}</button>
         <input data-f="weight" inputmode="decimal" value="${esc(r.weight)}" placeholder="${esc(hint.weight)}" aria-label="Weight">
         <input data-f="reps" inputmode="numeric" value="${esc(r.reps)}" placeholder="${esc(hint.reps)}" aria-label="Reps">
         ${live ? `<button class="tick" data-act="tick" aria-pressed="${r.done}" aria-label="Set done">✓</button>` : ""}
       </div>`;
+      if (editor.setMenu === `${xi}:${si}`) {
+        html += `<div class="setmenu" data-s="${si}">
+          <div class="small muted">Effort (RPE): 10 = nothing left · 9 = 1 more rep in the tank · 8 = 2 more…</div>
+          <div class="chips">${RPES.map((v) => `<button class="chip${r.rpe === v ? " on" : ""}" data-act="rpe" data-v="${v}">${v}</button>`).join("")}</div>
+          <div class="ex-menu">
+            ${r.rpe != null ? `<button class="secondary" data-act="rpe" data-v="">Clear RPE</button>` : ""}
+            <button class="secondary danger" data-act="delset">Delete set</button>
+          </div></div>`;
+      }
     });
     html += `<button class="addset" data-act="addset">+ Add set</button></section>`;
   });
@@ -323,9 +349,20 @@ $("editor").addEventListener("click", async (ev) => {
     case "save": await saveEditor(); return;
     case "addex": openPicker(); return;
     case "addset": ex.sets.push(blankRow(cortex.newId())); break;
+    case "exinfo": openExercise(ex.key); return;
+    case "setmenu": {
+      const id = `${xi}:${si}`;
+      editor.setMenu = editor.setMenu === id ? null : id;
+      renderEditor();
+      return;
+    }
+    case "rpe":
+      ex.sets[si].rpe = b.dataset.v === "" ? null : Number(b.dataset.v);
+      editor.setMenu = null;
+      break;
     case "delset":
-      if (!confirm(`Delete set ${si + 1}?`)) return;
       ex.sets.splice(si, 1);
+      editor.setMenu = null;
       break;
     case "useprev": {
       const p = previousSets(workouts, ex.key, d.start, d.id)[si];
@@ -339,7 +376,7 @@ $("editor").addEventListener("click", async (ev) => {
     case "exremove":
       if (ex.sets.some((r) => r.weight || r.reps) && !confirm(`Remove ${exName(ex.key)} and its sets?`)) return;
       d.exercises.splice(xi, 1);
-      editor.menus.clear(); editor.notes.clear();
+      editor.menus.clear(); editor.notes.clear(); editor.setMenu = null;
       break;
     case "discard":
       if (!confirm("Discard this workout? Nothing from it will be saved.")) return;
@@ -407,9 +444,7 @@ async function saveEditor() {
 // ---------- Exercise picker ----------
 
 function openPicker() {
-  history.pushState({ ui: "picker" }, "", location.hash);
-  $("picker").hidden = false;
-  $("picker").innerHTML = `<div class="wrap">
+  openOverlay("picker").innerHTML = `<div class="wrap">
     <div class="sheet-top">
       <button class="back" data-act="pkclose" aria-label="Back">‹</button>
       <input class="pk-search" id="pksearch" placeholder="Search or create" autocomplete="off" enterkeyhint="search">
@@ -463,7 +498,64 @@ $("picker").addEventListener("click", async (ev) => {
   requestAnimationFrame(() => $("editor").scrollTo({ top: $("editor").scrollHeight }));
 });
 
-// ---------- Progress tab (per-exercise strength chart; the full overview comes next) ----------
+// ---------- Exercise detail (Progress tab, and the screen behind an exercise's name) ----------
+
+const METRICS = {
+  e1rm: { label: "Est. 1RM", hero: "best estimated 1RM" },
+  heaviest: { label: "Heaviest", hero: "heaviest weight" },
+  volume: { label: "Volume", hero: "best session volume" },
+};
+
+// Everything about one exercise: a per-session chart (est. 1RM, heaviest or volume),
+// records, and every session it was done in.
+function renderExerciseInto(el, key) {
+  const mine = sets.filter((s) => s.metric === key);
+  if (!mine.length) { el.innerHTML = `<p class="empty">No sets of ${esc(exName(key))} yet.</p>`; return; }
+  const series = sessionSeries(mine);
+  const { best, reps } = personalRecords(mine);
+  const top = series.reduce((a, d) => (d[chartMetric] > a[chartMetric] ? d : a), series[0]);
+  const first = series[0];
+  const gain = series.length > 1 ? top[chartMetric] - first[chartMetric] : 0;
+  const sessions = workouts.filter((w) => w.exercises.some((x) => x.key === key && x.sets.length));
+
+  el.innerHTML = `
+    <div class="chips" role="group" aria-label="Chart">${Object.entries(METRICS).map(([k, m]) =>
+      `<button class="chip${k === chartMetric ? " on" : ""}" data-metric="${k}">${m.label}</button>`).join("")}</div>
+    <div class="hero">
+      <div class="label">${esc(exName(key))} · ${METRICS[chartMetric].hero}</div>
+      <div class="big">${top[chartMetric] ? fmtW(top[chartMetric]) : "—"} <small>${unit}</small></div>
+      <div class="sub">${esc(fmtDayKey(top.day))}${gain > 0 ? ` · +${fmtW(gain)} ${unit} since ${esc(fmtDayKey(first.day))}` : ""}</div>
+    </div>
+    <div class="chart"></div>
+    <h2>Records</h2>
+    <ul class="list">
+      ${best ? `<li><span>Best est. 1RM</span><span>${fmtW(best.e1rm)} ${unit} <span class="muted small">(${fmtW(best.weight)} × ${best.reps})</span></span></li>` : ""}
+      <li><span>Sessions · sets</span><span>${series.length} · ${mine.length}</span></li>
+    </ul>
+    ${reps.length ? `<h2>Rep records</h2>
+    <table>
+      <thead><tr><th>Reps</th><th class="r">Heaviest</th><th class="r">Est. 1RM</th><th class="r">Date</th></tr></thead>
+      <tbody>${reps.map((r) => `<tr>
+        <td>${r.reps}</td><td class="r">${fmtW(r.weight)} ${unit}</td>
+        <td class="r">${fmtW(r.e1rm)}</td><td class="r">${esc(fmtDayKey(dayKey(r.recorded_at)))}</td>
+      </tr>`).join("")}</tbody>
+    </table>` : ""}
+    <h2>History</h2>
+    ${sessions.map((w) => {
+      const x = w.exercises.find((e) => e.key === key);
+      return `<div class="card hist">
+        <div class="head"><b>${esc(w.name)}</b><span class="muted small">${esc(fmtDate(w.start))}</span></div>
+        ${x.notes ? `<div class="notes">${esc(x.notes)}</div>` : ""}
+        ${x.sets.map((st, i) => `<div class="line"><span class="muted">${i + 1}</span><span>${esc(setText(st))}</span></div>`).join("")}
+      </div>`;
+    }).join("")}`;
+
+  const points = series.map((d) => ({
+    day: d.day, v: convert(d[chartMetric], "kg", unit),
+    sub: chartMetric === "volume" ? `${d.sets} sets` : d.best ? `${fmtW(d.best.weight)}×${d.best.reps}` : "",
+  })).filter((p) => p.v > 0);
+  drawChart(el.querySelector(".chart"), points);
+}
 
 function renderProgress() {
   const keys = [...new Set(sets.slice().sort((a, b) => (a.recorded_at < b.recorded_at ? 1 : -1)).map((s) => s.metric))];
@@ -474,29 +566,7 @@ function renderProgress() {
     $("pbody").innerHTML = `<p class="empty">Log a workout and your progress shows up here.</p>`;
     return;
   }
-  const mine = sets.filter((s) => s.metric === progressKey);
-  const days = bestPerDay(mine);
-  const { best, reps } = personalRecords(mine);
-  if (!best) { $("pbody").innerHTML = `<p class="empty">No weighted sets for this exercise yet.</p>`; return; }
-  const since = days.length > 1 ? days[0] : null;
-  const change = since ? best.e1rm - since.e1rm : 0;
-  $("pbody").innerHTML = `
-    <div class="hero">
-      <div class="label">${esc(exName(progressKey))} · best estimated 1RM</div>
-      <div class="big">${fmtW(best.e1rm)} <small>${unit}</small></div>
-      <div class="sub">from ${fmtW(best.weight)} × ${best.reps} on ${esc(fmtDayKey(dayKey(best.recorded_at)))}${
-        since && change > 0 ? ` · +${fmtW(change)} ${unit} since ${esc(fmtDayKey(since.day))}` : ""}</div>
-    </div>
-    <div class="chart" id="chart"></div>
-    <h2>Rep records</h2>
-    <table>
-      <thead><tr><th>Reps</th><th class="r">Heaviest</th><th class="r">Est. 1RM</th><th class="r">Date</th></tr></thead>
-      <tbody>${reps.map((r) => `<tr>
-        <td>${r.reps}</td><td class="r">${fmtW(r.weight)} ${unit}</td>
-        <td class="r">${fmtW(r.e1rm)}</td><td class="r">${esc(fmtDayKey(dayKey(r.recorded_at)))}</td>
-      </tr>`).join("")}</tbody>
-    </table>`;
-  drawChart($("chart"), days);
+  renderExerciseInto($("pbody"), progressKey);
 }
 
 $("pchips").addEventListener("click", (ev) => {
@@ -504,44 +574,67 @@ $("pchips").addEventListener("click", (ev) => {
   if (k) { progressKey = k; renderProgress(); }
 });
 
-// Hand-drawn SVG line chart (DESIGN D19). Values arrive in kg; axis and tooltip show the display unit.
-function drawChart(el, daysKg) {
-  if (daysKg.length < 2) {
+let exsheetKey = null;
+function openExercise(key) {
+  exsheetKey = key;
+  openOverlay("exercise").innerHTML = `<div class="wrap">
+    <div class="sheet-top">
+      <button class="back" data-act="close" aria-label="Back">‹</button>
+      <div class="title">${esc(exName(key))}</div><span></span>
+    </div>
+    <div class="sheet-body" id="exbody"></div></div>`;
+  renderExerciseInto($("exbody"), key);
+}
+
+// Chart chips and the back button work the same in both places.
+for (const id of ["pbody", "exsheet"]) {
+  $(id).addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-act=close]")) { history.back(); return; }
+    const m = ev.target.closest("[data-metric]")?.dataset.metric;
+    if (!m) return;
+    chartMetric = m;
+    if (id === "pbody") renderProgress(); else renderExerciseInto($("exbody"), exsheetKey);
+  });
+}
+
+// Hand-drawn SVG line chart (DESIGN D19): one point per session, x = real time.
+// points: [{ day: "YYYY-MM-DD", v: number in display unit, sub: extra tooltip text }]
+function drawChart(el, points) {
+  if (points.length < 2) {
     el.innerHTML = `<p class="empty">One session so far. Log another day to see a trend line.</p>`;
     return;
   }
-  const days = daysKg.map((d) => ({ ...d, e1rm: convert(d.e1rm, "kg", unit), weight: convert(d.weight, "kg", unit) }));
   const W = el.clientWidth || 340, H = 220;
-  const pad = { l: 40, r: 12, t: 40, b: 26 };
-  const t = days.map((d) => new Date(noonOf(d.day)).getTime());
-  const v = days.map((d) => d.e1rm);
+  const pad = { l: 48, r: 12, t: 40, b: 26 };
+  const t = points.map((d) => new Date(noonOf(d.day)).getTime());
+  const v = points.map((d) => d.v);
   let lo = Math.min(...v), hi = Math.max(...v);
   if (hi - lo < 5) { lo -= 2.5; hi += 2.5; }
   const raw = (hi - lo) / 4, mag = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 2.5, 5, 10].map((s) => s * mag).find((s) => s >= raw);
-  lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+  lo = Math.max(0, Math.floor(lo / step) * step); hi = Math.ceil(hi / step) * step;
   const x = (ms) => pad.l + (ms - t[0]) / (t.at(-1) - t[0]) * (W - pad.l - pad.r);
   const y = (val) => pad.t + (hi - val) / (hi - lo) * (H - pad.t - pad.b);
-  const r1 = (n) => fmtNum(Math.round(n * 10) / 10);
+  const r1 = (n) => (n >= 1000 ? Math.round(n).toLocaleString() : fmtNum(Math.round(n * 10) / 10));
   const grid = [];
   for (let g = lo; g <= hi + 1e-9; g += step) {
     grid.push(`<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(g)}" y2="${y(g)}" stroke="var(--grid)" stroke-width="1"/>
       <text x="${pad.l - 8}" y="${y(g) + 4}" text-anchor="end">${r1(g)}</text>`);
   }
   const xLabels = [0, t.length - 1].map((i) =>
-    `<text x="${x(t[i])}" y="${H - 6}" text-anchor="${i === 0 ? "start" : "end"}">${esc(fmtDayKey(days[i].day))}</text>`);
+    `<text x="${x(t[i])}" y="${H - 6}" text-anchor="${i === 0 ? "start" : "end"}">${esc(fmtDayKey(points[i].day))}</text>`);
   const path = t.map((ms, i) => `${i ? "L" : "M"}${x(ms).toFixed(1)},${y(v[i]).toFixed(1)}`).join("");
   const dots = t.map((ms, i) => `<circle cx="${x(ms)}" cy="${y(v[i])}" r="4" fill="var(--accent)" stroke="var(--bg)" stroke-width="2"/>`).join("");
   el.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Best estimated 1RM per session">
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Per-session chart">
       ${grid.join("")}${xLabels.join("")}
       <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-      <line id="cross" y1="${pad.t}" y2="${H - pad.b}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
+      <line class="cross" y1="${pad.t}" y2="${H - pad.b}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
       ${dots}
-      <circle id="focus" r="6" fill="var(--accent)" stroke="var(--text)" stroke-width="2" visibility="hidden"/>
+      <circle class="focus" r="6" fill="var(--accent)" stroke="var(--text)" stroke-width="2" visibility="hidden"/>
     </svg>
-    <div class="tip" id="tip" hidden></div>`;
-  const svg = el.querySelector("svg"), cross = el.querySelector("#cross"), focus = el.querySelector("#focus"), tip = el.querySelector("#tip");
+    <div class="tip" hidden></div>`;
+  const svg = el.querySelector("svg"), cross = el.querySelector(".cross"), focus = el.querySelector(".focus"), tip = el.querySelector(".tip");
   const show = (clientX) => {
     const r = svg.getBoundingClientRect();
     const px = (clientX - r.left) * (W / r.width);
@@ -550,8 +643,8 @@ function drawChart(el, daysKg) {
     const cx = x(t[i]), cy = y(v[i]);
     cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("visibility", "visible");
     focus.setAttribute("cx", cx); focus.setAttribute("cy", cy); focus.setAttribute("visibility", "visible");
-    const d = days[i];
-    tip.innerHTML = `<b>${r1(d.e1rm)} ${unit}</b> <span>· ${r1(d.weight)}×${d.reps} · ${esc(fmtDayKey(d.day))}</span>`;
+    const d = points[i];
+    tip.innerHTML = `<b>${r1(d.v)} ${unit}</b> <span>· ${esc(d.sub)}${d.sub ? " · " : ""}${esc(fmtDayKey(d.day))}</span>`;
     tip.hidden = false;
     const left = cx * (r.width / W);
     tip.style.left = `${Math.min(Math.max(left, tip.offsetWidth / 2), r.width - tip.offsetWidth / 2)}px`;
@@ -565,7 +658,10 @@ function drawChart(el, daysKg) {
 let resizeTimer;
 addEventListener("resize", () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { if (tab === "progress") renderProgress(); }, 150);
+  resizeTimer = setTimeout(() => {
+    if (!$("exsheet").hidden && exsheetKey) renderExerciseInto($("exbody"), exsheetKey);
+    else if (tab === "progress") renderProgress();
+  }, 150);
 });
 
 // ---------- Exercises tab (browse for now; creating and editing comes next) ----------
@@ -581,32 +677,47 @@ function renderExercises() {
   for (const [m, list] of groups) {
     if (!list.length) continue;
     html += `<h2>${esc(MUSCLES[m] || "Other")}</h2><ul class="list">` + list.sort((a, b) => a.name.localeCompare(b.name)).map((x) =>
-      `<li><span>${esc(x.name)}${x.custom ? ` <span class="muted small">· yours</span>` : ""}</span><span class="muted small">${counts.get(x.key) ? `${counts.get(x.key)} sets` : esc(x.equipment || "")}</span></li>`
+      `<li><button class="rowbtn" data-key="${esc(x.key)}"><span>${esc(x.name)}${x.custom ? ` <span class="muted small">· yours</span>` : ""}</span><span class="muted small">${counts.get(x.key) ? `${counts.get(x.key)} sets` : esc(x.equipment || "")}</span></button></li>`
     ).join("") + `</ul>`;
   }
   $("view-exercises").innerHTML = html;
 }
 
-// ---------- Profile tab (settings for now) ----------
+$("view-exercises").addEventListener("click", (ev) => {
+  const k = ev.target.closest("[data-key]")?.dataset.key;
+  if (k) openExercise(k);
+});
+
+// ---------- Profile tab + settings screen ----------
 
 function renderProfile() {
-  $("view-profile").innerHTML = `
-    <h2>Settings</h2>
-    <ul class="list">
-      <li><span>Weight unit<br><span class="muted small">Lifts and bodyweight. Saved sets keep the unit they were logged in.</span></span>
-        <span class="seg" role="group" aria-label="Weight unit">
-          <button data-unit="lb" aria-pressed="${unit === "lb"}">lb</button>
-          <button data-unit="kg" aria-pressed="${unit === "kg"}">kg</button>
-        </span></li>
-    </ul>
-    <p class="empty">Your profile (workout calendar, lifetime stats, picture) is coming later.</p>`;
+  $("view-profile").innerHTML = `<p class="empty">Your profile (workout calendar, lifetime stats, picture) is coming later. Settings are behind the ⚙ button at the top.</p>`;
 }
 
-$("view-profile").addEventListener("click", async (ev) => {
+function renderSettings() {
+  $("settings").innerHTML = `<div class="wrap">
+    <div class="sheet-top">
+      <button class="back" data-act="close" aria-label="Back">‹</button>
+      <div class="title">Settings</div><span></span>
+    </div>
+    <div class="sheet-body">
+      <ul class="list">
+        <li><span>Weight unit<br><span class="muted small">Lifts and bodyweight. Saved sets keep the unit they were logged in.</span></span>
+          <span class="seg" role="group" aria-label="Weight unit">
+            <button data-unit="lb" aria-pressed="${unit === "lb"}">lb</button>
+            <button data-unit="kg" aria-pressed="${unit === "kg"}">kg</button>
+          </span></li>
+      </ul>
+    </div></div>`;
+}
+
+$("gear").addEventListener("click", () => { openOverlay("settings"); renderSettings(); });
+$("settings").addEventListener("click", async (ev) => {
+  if (ev.target.closest("[data-act=close]")) { history.back(); return; }
   const u = ev.target.closest("[data-unit]")?.dataset.unit;
   if (!u || u === unit) return;
   unit = u;
-  renderProfile();
+  renderSettings();
   await cortex.putEntries([{ client_id: "setting:weight_unit", module: "settings", metric: "weight_unit", data: { value: u } }]);
 });
 
@@ -637,7 +748,8 @@ async function refresh() {
   workouts = groupWorkouts(entries);
   lib = resolveExercises(entries.filter((e) => e.metric === EXERCISE));
   if (!editor) render();
-  else if (!$("picker").hidden) renderPicker();
+  if (!$("picker").hidden) renderPicker();
+  if (!$("exsheet").hidden && exsheetKey) renderExerciseInto($("exbody"), exsheetKey);
   await showSync();
 }
 

@@ -163,6 +163,16 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Why:** each tab has one job, reachable with a thumb. Pure modules are tested in Node.
 - **Trade-off:** Exercises, Bodyweight and Profile start as placeholders.
 
+### D29. Perceived effort (RPE) per set, optional
+- **Decision:** a set can carry `data.rpe` from 6 to 10 in half steps (10 = nothing left, 9 = one more rep possible, …). Set it by tapping the set number in the workout screen; shown as "@8".
+- **Why:** RPE is the common way to record how hard a set was (Stronger, Strong and Hevy all offer it), and the 6-10 scale with half steps is the standard RIR-based one.
+- **Trade-off:** one more tap per set if you use it; nothing is computed from it yet (it could later feed autoregulation or e1RM adjustments).
+
+### D30. One exercise view, reused
+- **Decision:** the screen behind an exercise's name (from a workout, or the Exercises tab) and the Progress tab render the same view: a per-session chart switchable between est. 1RM, heaviest weight and session volume, records, rep records and the full history of that exercise.
+- **Why:** one piece of code, consistent everywhere. Per-session points (not per set) keep the chart readable; the per-set detail is in the history list right below.
+- **Trade-off:** the Progress tab is a per-exercise view until the overview (step 2) replaces it.
+
 ## Security and hosting
 
 ### D16. No auth yet; tailnet only
@@ -181,6 +191,16 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Decision:** while the server runs, it checks hourly and copies `cortex.db` to `backups/cortex-YYYY-MM-DD.db` once per day using SQLite's backup API, then deletes all but the newest 30. Folder overridable with `CORTEX_BACKUPS`; gitignored.
 - **Why:** the server copy is the merged history of every device; losing that one file shouldn't mean losing it. The backup API gives a consistent snapshot even mid-write (a plain file copy might not). Writing to a temp name and renaming means a half-written copy never looks like a real backup.
 - **Trade-off:** backups sit on the same disk as the database, so they protect against corruption and mistakes, not a dead drive. Copying them off the machine (cloud drive, the future Pi) is a later step.
+
+## Future: standalone apps (logged, not decided)
+
+Today Cortex is a web app installed from Chrome (a PWA). On Android it opens full screen with its own icon, but it is still run by Chrome. Options, cheapest first:
+
+1. **Windows, today, free:** open Cortex in Chrome or Edge on the PC and choose "Install". It gets its own window, Start-menu entry and taskbar icon. Same code, zero work, still browser-run.
+2. **Android standalone (Capacitor):** wraps the same pages into a real APK. Runs in Android's built-in WebView, not the Chrome app, and can use native features later (volume control, Health Connect, notifications for the rest timer).
+3. **Windows standalone (Tauri):** same idea for a desktop `.exe`, small (uses Windows' built-in WebView2).
+
+Both 2 and 3 are already the long-term plan (D13) and reuse `static/core/` unchanged. What they need first: the pages bundled into the app instead of downloaded from the server, the server address set via `configure({ apiBase })`, and **CORS + login on the server**, because the app is no longer the same website as the API. Login is also needed for other people using Cortex, so it's one piece of work serving both goals.
 
 ## Open questions
 

@@ -34,3 +34,9 @@ const lb = { value: 225, unit: "lb", data: { reps: 1 }, recorded_at: t(7, 10) };
 assert.ok(Math.abs(e1rm(102.0583, 1) - personalRecords([lb]).best.e1rm) < 0.001);
 assert.equal(prKind({ value: 200, unit: "lb", data: { reps: 1 }, recorded_at: t(8, 10) }, sets), "e1rm"); // 90.7 kg > 88
 console.log("stats.js: all tests passed");
+
+import { sessionSeries } from "../static/lifting/stats.js";
+const series = sessionSeries(sets);
+assert.deepEqual(series.map((d) => [d.heaviest, d.volume, d.sets]), [[70, 830, 2], [80, 465, 2], [85, 85, 1]]);
+assert.equal(series[0].best.weight, 70);
+console.log("sessionSeries: ok");

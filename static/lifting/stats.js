@@ -64,3 +64,20 @@ export function prKind(newSet, previous) {
   if (!atReps || s.weight > atReps.weight) return "reps";
   return null;
 }
+
+// One row per training day for an exercise, oldest first: best estimated 1RM, heaviest
+// weight, and total volume (weight × reps), all in kg. Feeds the exercise charts.
+export function sessionSeries(entries) {
+  const days = new Map();
+  for (const e of entries) {
+    const s = setOf(e);
+    const key = dayKey(e.recorded_at);
+    const d = days.get(key) || { day: key, e1rm: 0, heaviest: 0, volume: 0, sets: 0, best: null };
+    d.sets += 1;
+    d.volume += s.weight * (s.reps || 0);
+    if (s.weight > d.heaviest) d.heaviest = s.weight;
+    if (s.e1rm > d.e1rm) { d.e1rm = s.e1rm; d.best = s; }
+    days.set(key, d);
+  }
+  return [...days.values()].sort((a, b) => (a.day < b.day ? -1 : 1));
+}
