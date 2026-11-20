@@ -49,3 +49,12 @@ API docs at http://localhost:8000/docs, lifting page at http://localhost:8000/li
 Future ideas (not scheduled) live in `IDEAS.md`; add new ones there.
 
 Core (started) → Lifting (installed on phone via Tailscale ✓; step 1 workouts + 5 tabs ✓, step 2 Progress overview + Exercises editing ✓ → 3 Bodyweight → 4 Profile → 5 photos/posts; rest timer later) → Body/food → Video challenge → Importers → Android companion (volume slider, sound-dose logger) → maybe PC clipboard companion → Guitar practice app.
+
+### Lifting changes queued (owner's feedback, not done yet)
+- Deleting a set never asks for confirmation (undo D41 for sets).
+- No ticking off: a set with values is part of the workout when saved. Drop the tick column, the unticked warning on Finish, and tick-based PR toasts (move PR feedback elsewhere).
+- Replace every emoji in the UI (🏆 🗑 📌 …) with SVG icons.
+- Exercise ••• opens a small popup menu (Add note, Add cue, Remove exercise), not the big inline grid.
+- Reorder exercises by long-press and drag: the card lifts out, moves up/down with a highlight; remove Move up/down from menus.
+- Long-press currently selects text: disable text selection/callout on rows and cards (`user-select: none`, `-webkit-touch-callout: none`), keep it in inputs.
+- Charts with a single data point still render (one dot, no trendline).
