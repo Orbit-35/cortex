@@ -247,6 +247,16 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Decision:** the tuning list moved from a chip row at the top into a bottom sheet opened by a button showing the current tuning (top right). Chromatic is listed first, then the guitar presets, then "Your tunings" and "New custom tuning". A custom tuning has a name and 4–8 strings, each set with −/+ in semitones (B0 to G5), starting from the tuning in use; tapping a note plays it. Custom tunings are entries: `module=guitar`, `metric=_tuning`, id `tuning:<uuid>`, `data={name, notes:["E2", …]}` (low to high, sharps). Deleting one needs a second tap.
 - **Why:** the owner found the chip row cluttered. Custom tunings are worth keeping across devices and reinstalls, unlike the per-device choice of tuning and A4 (still `localStorage`).
 - **Trade-off:** sharps only in custom tunings (E♭ shows as D♯).
+- **Confirmations:** creating or saving a tuning asks first (showing its notes), deleting asks in a red dialog, and leaving the editor with unsaved changes (Cancel, tap outside, back gesture) asks "Discard?". A toast confirms the result.
+
+### D45. One theme file and one shared dialog for all of Cortex; accent is pink
+- **Decision:** colour tokens live in `static/core/theme.css`, linked by every page (pages keep only their own extras, like lifting's muscle-group colours). The accent is the owner's portfolio pink `#ff2e88`, with near-black text on pink fills (5.6:1; white would be 3.5:1). The danger colour moved to orange-red `#ff6a3d` so it can't be mistaken for the accent. The confirm dialog and toast live in `static/core/ui.js` (DOM code, so kept out of `cortex.js`); lifting's `ask()` is now a thin wrapper over it.
+- **Why:** the owner wants all of Cortex in their portfolio's pink, and changing the look later should be a one-file edit. One dialog means every app confirms the same way.
+- **Trade-off:** one more request per page (cached by the service worker, so only on updates).
+
+### D46. Tuner meter: arc with a gliding dot
+- **Decision:** the needle gauge became a thick arc (−50 to +50 cents) with a dot that glides to the reading every animation frame and a coloured band from the centre to the dot. Colour shows closeness: pink when far, amber within 12 cents, green with a glow within 3. The note sits large inside the arc; "Tune up / Tune down / In tune" is a coloured pill below. The meter fills the screen width (up to 480 px).
+- **Why:** the owner found the needle plain and small. The band and colour read at a glance from arm's length while tuning.
 
 ## Security and hosting
 

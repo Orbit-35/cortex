@@ -1,0 +1,16 @@
+/* Cortex colours, shared by every app. Change the look of all of Cortex here (DESIGN D45).
+   Accent is the owner's portfolio pink; text on an accent fill is near-black for contrast (5.6:1). */
+:root {
+  --bg: #111418;
+  --card: #1b2027;
+  --card2: #222832;
+  --line: #2a313b;
+  --text: #e8ecf1;
+  --muted: #8b95a3;
+  --accent: #ff2e88;
+  --on-accent: #0a0a0f;
+  --accent-soft: rgb(255 46 136 / .14);
+  --danger: #ff6a3d; /* orange-red, so it never reads as the pink accent */
+  --good: #4cc38a;
+  --warn: #f5a524;
+}

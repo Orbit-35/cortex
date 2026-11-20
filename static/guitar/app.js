@@ -1,6 +1,7 @@
 // Guitar tuner page. Audio stays on the device: the mic feeds an analyser, nothing is recorded or sent.
 // Custom tunings are Cortex entries (module=guitar, metric=_tuning), so they sync like everything else (D44).
 import * as cortex from "/core/cortex.js";
+import { ask, cancelAsk, toast } from "/core/ui.js";
 import { detectPitch } from "./pitch.js";
 import { TUNINGS, noteText, parseNote, midiToFreq, centsOff, nearestNote, closestString, median, display } from "./music.js";
 
@@ -39,27 +40,39 @@ const escHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCod
 
 // ---------- Static UI ----------
 
+// Meter geometry: an arc of 2 x SWEEP degrees for -50..+50 cents, centred on (CX, CY).
+const CX = 200, CY = 214, R = 168, SWEEP = 66;
+const rad = (c) => ((Math.max(-50, Math.min(50, c)) / 50) * SWEEP - 90) * Math.PI / 180;
+const pt = (c, r = R) => [CX + r * Math.cos(rad(c)), CY + r * Math.sin(rad(c))];
+const f1 = (n) => n.toFixed(1);
+function arc(c1, c2, r = R) { // c1 < c2, drawn clockwise
+  const [x1, y1] = pt(c1, r), [x2, y2] = pt(c2, r);
+  return `M${f1(x1)} ${f1(y1)}A${r} ${r} 0 0 1 ${f1(x2)} ${f1(y2)}`;
+}
+
 function drawGauge() {
-  // Semicircle from -50 to +50 cents. Needle pivots at (190, 200).
-  const cx = 190, cy = 200, r = 170;
-  const at = (c, rad) => {
-    const a = ((c / 50) * 60 - 90) * Math.PI / 180;
-    return [cx + rad * Math.cos(a), cy + rad * Math.sin(a)];
-  };
-  let s = "";
+  let s = `<defs><filter id="blur" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="7"/></filter></defs>`;
   for (let c = -50; c <= 50; c += 5) {
-    const major = c % 25 === 0;
-    const [x1, y1] = at(c, r - (major ? 22 : 12)), [x2, y2] = at(c, r);
-    s += `<line class="tick${major ? " major" : ""}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+    const kind = c === 0 ? " zero" : c % 25 === 0 ? " major" : "";
+    const [x1, y1] = pt(c, R + 20), [x2, y2] = pt(c, R + (c === 0 ? 38 : kind ? 32 : 26));
+    s += `<line class="tick${kind}" x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}"/>`;
   }
-  const [zx1, zy1] = at(-IN_TUNE, r + 10), [zx2, zy2] = at(IN_TUNE, r + 10);
-  s += `<path class="zone" d="M${zx1} ${zy1} A${r + 10} ${r + 10} 0 0 1 ${zx2} ${zy2}"/>`;
-  for (const c of [-50, -25, 25, 50]) {
-    const [x, y] = at(c, r - 38);
-    s += `<text class="lbl" x="${x}" y="${y + 4}">${c > 0 ? "+" : ""}${c}</text>`;
-  }
-  s += `<g class="needle idle" id="needle"><line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - r + 4}"/><circle cx="${cx}" cy="${cy}" r="9"/></g>`;
+  s += `<path class="track" d="${arc(-50, 50)}"/><path class="zone" d="${arc(-IN_TUNE, IN_TUNE)}"/>`;
+  s += `<path class="band" id="gband"/><circle class="halo" id="ghalo" r="24" filter="url(#blur)"/><circle class="dot" id="gdot" r="16"/>`;
+  const [lx, ly] = pt(-50, R), [rx, ry] = pt(50, R);
+  s += `<text class="sym" x="${f1(lx)}" y="${f1(ly + 44)}">♭</text><text class="sym" x="${f1(rx)}" y="${f1(ry + 44)}">♯</text>`;
   $("gauge").innerHTML = s;
+}
+
+// The dot glides toward the latest reading instead of jumping (drawn every animation frame).
+let targetCents = null, shownCents = 0;
+function drawMeter() {
+  if (targetCents == null) return;
+  shownCents += (targetCents - shownCents) * 0.28;
+  const c = Math.max(-50, Math.min(50, shownCents));
+  $("gband").setAttribute("d", Math.abs(c) < 0.6 ? "" : c < 0 ? arc(c, 0) : arc(0, c));
+  const [x, y] = pt(c);
+  for (const id of ["gdot", "ghalo"]) { $(id).setAttribute("cx", f1(x)); $(id).setAttribute("cy", f1(y)); }
 }
 
 function renderTunings() {
@@ -94,12 +107,12 @@ function renderA4() { $("a4").textContent = `A4 ${a4} Hz`; }
 // ---------- Live reading ----------
 
 function show(freq) {
-  const stage = $("stage"), needle = $("needle");
+  const stage = $("stage");
   if (freq == null) {
     stage.className = "stage state-idle";
-    needle.classList.add("idle");
-    needle.style.transform = "rotate(0deg)";
-    $("status").textContent = "Play a string";
+    targetCents = null;
+    $("note").textContent = "–";
+    $("status").textContent = tuning.notes.length ? "Play a string" : "Play a note";
     $("readout").textContent = "";
     if (current !== null && locked === null) { current = null; renderStrings(); }
     return;
@@ -116,9 +129,9 @@ function show(freq) {
   }
   const abs = Math.abs(cents);
   const state = abs <= IN_TUNE ? "in" : abs <= NEAR ? "near" : "far";
+  if (targetCents == null) shownCents = cents; // first reading: start where the note is
+  targetCents = cents;
   stage.className = `stage state-${state}`;
-  needle.classList.remove("idle");
-  needle.style.transform = `rotate(${(Math.max(-50, Math.min(50, cents)) / 50) * 60}deg)`;
   $("note").innerHTML = `${name}<sub>${octave}</sub>`;
   // Too low means the string is too loose: tighten (tune up).
   $("status").innerHTML = state === "in" ? `${ICON.check} In tune`
@@ -138,6 +151,7 @@ function show(freq) {
 
 function tickLoop() {
   raf = requestAnimationFrame(tickLoop);
+  drawMeter();
   if (++frame % 2) return; // ~30 readings a second is plenty and halves the CPU cost
   const now = performance.now();
   if (now < muteUntil) return; // ignore our own reference tone
@@ -247,11 +261,22 @@ function openSheet(id) {
 }
 const closeSheet = () => history.back();
 addEventListener("popstate", (ev) => { // close every sheet above the one we landed on
+  cancelAsk();
   const keep = ev.state?.sheet;
+  if (open.at(-1) === "editor" && keep !== "editor" && draftDirty()) {
+    history.pushState({ sheet: "editor" }, ""); // stay put and ask first
+    okToLeave().then((yes) => { if (yes) { draft = null; history.back(); } });
+    return;
+  }
   while (open.length && open.at(-1) !== keep) $(open.pop()).hidden = true;
 });
 for (const id of ["picker", "editor"])
-  $(id).addEventListener("click", (ev) => { if (ev.target.id === id) closeSheet(); }); // tap the dim area
+  $(id).addEventListener("click", async (ev) => { // tap the dim area
+    if (ev.target.id !== id) return;
+    if (id === "editor" && !(await okToLeave())) return;
+    if (id === "editor") draft = null;
+    closeSheet();
+  });
 
 function renderPicker() {
   const row = (t) => `<div class="trow${t.id === tuning.id ? " on" : ""}">
@@ -281,7 +306,8 @@ const MIN_MIDI = 23, MAX_MIDI = 79; // B0 .. G5: covers bass, baritone and high 
 
 function openEditor(t) {
   const base = t || (tuning.notes.length ? tuning : TUNINGS[1]);
-  draft = { id: t?.id || null, name: t?.name || "", midis: base.notes.map(parseNote), armed: false };
+  draft = { id: t?.id || null, name: t?.name || "", midis: base.notes.map(parseNote) };
+  draft.orig = JSON.stringify([draft.name, draft.midis]);
   renderEditor();
   openSheet("editor");
 }
@@ -297,13 +323,12 @@ function renderEditor() {
         <button data-s="${i}" data-d="1" aria-label="Raise string ${n - i}">+</button></div></div>`).join("")}
     <p class="hint" style="text-align:left">Tap a note to hear it. Starts from ${escHtml(draft.id ? "your saved tuning" : (tuning.notes.length ? tuning.name : "Standard"))}.</p>
     <div class="actions"><button class="btn2" data-act="cancel">Cancel</button><button class="btn1" data-act="save">Save</button></div>
-    ${draft.id ? `<button class="btndel${draft.armed ? " armed" : ""}" data-act="delete">${draft.armed ? "Tap again to delete" : "Delete tuning"}</button>` : ""}`;
+    ${draft.id ? `<button class="btndel" data-act="delete">Delete tuning</button>` : ""}`;
 }
 $("editorpanel").addEventListener("input", (ev) => { if (ev.target.id === "tname") draft.name = ev.target.value; });
 $("editorpanel").addEventListener("click", async (ev) => {
   const b = ev.target.closest("button");
   if (!b) return;
-  if (b.dataset.act !== "delete") draft.armed = false;
   if (b.dataset.d) {
     const i = Number(b.dataset.s);
     draft.midis[i] = Math.max(MIN_MIDI, Math.min(MAX_MIDI, draft.midis[i] + Number(b.dataset.d)));
@@ -315,30 +340,49 @@ $("editorpanel").addEventListener("click", async (ev) => {
     const m = draft.midis;
     if (b.dataset.count === "1" && m.length < 8) m.unshift(Math.max(MIN_MIDI, m[0] - 5)); // new low string, a fourth down
     if (b.dataset.count === "-1" && m.length > 4) m.shift();
-  } else if (b.dataset.act === "cancel") { closeSheet(); return; }
+  } else if (b.dataset.act === "cancel") { if (await okToLeave()) { draft = null; closeSheet(); } return; }
   else if (b.dataset.act === "save") { await saveDraft(); return; }
-  else if (b.dataset.act === "delete") {
-    if (!draft.armed) draft.armed = true;
-    else { await deleteDraft(); return; }
-  }
+  else if (b.dataset.act === "delete") { await deleteDraft(); return; }
   renderEditor();
 });
 
+const draftDirty = () => draft && JSON.stringify([draft.name, draft.midis]) !== draft.orig;
+const draftNotes = () => draft.midis.map((m) => display(noteText(m)).name).join(" ");
+
+// Leaving the editor with changes asks first. Resolves true if it's fine to close.
+async function okToLeave() {
+  if (!draftDirty()) return true;
+  return ask(draft.id ? "Discard your changes?" : "Discard this tuning?",
+    draft.id ? "Your edits to this tuning won't be saved." : "It won't be saved.",
+    { yes: "Discard", no: "Keep editing", danger: true });
+}
+
 async function saveDraft() {
-  const name = draft.name.trim() || draft.midis.map((m) => display(noteText(m)).name).join(" ");
+  const name = draft.name.trim() || draftNotes();
+  const isNew = !draft.id;
+  const ok = await ask(isNew ? `Create “${name}”?` : `Save changes to “${name}”?`,
+    `Strings, thickest to thinnest: ${draftNotes()}`, { yes: isNew ? "Create" : "Save" });
+  if (!ok) return;
   const id = draft.id || `tuning:${cortex.newId()}`;
   const notes = draft.midis.map(noteText);
   await cortex.putEntries([{ client_id: id, module: "guitar", metric: TUNING, data: { name, notes } }]);
+  draft = null;
   await loadCustom();
   setTuning(allTunings().find((t) => t.id === id));
   history.go(-2); // close the editor and the list
+  toast(isNew ? `Created “${name}”` : `Saved “${name}”`);
 }
 async function deleteDraft() {
-  await cortex.deleteEntry(draft.id);
+  const name = draft.name.trim() || draftNotes();
+  if (!(await ask(`Delete “${name}”?`, "This can't be undone.", { yes: "Delete", danger: true }))) return;
+  const id = draft.id;
+  draft = null;
+  await cortex.deleteEntry(id);
   await loadCustom();
-  if (tuning.id === draft.id) setTuning(TUNINGS[1]);
+  if (tuning.id === id) setTuning(TUNINGS[1]);
   closeSheet();
   renderPicker();
+  toast(`Deleted “${name}”`);
 }
 
 async function loadCustom() {

@@ -8,10 +8,10 @@
 <link rel="icon" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
 <title>Cortex · Lifting</title>
+<link rel="stylesheet" href="/core/theme.css">
 <style>
   :root {
-    --bg: #111418; --card: #1b2027; --card2: #222832; --line: #2a313b; --text: #e8ecf1;
-    --muted: #8b95a3; --accent: #4f9cff; --danger: #ff6b6b; --good: #4cc38a; --warn: #f5a524;
+    /* Shared colours live in /core/theme.css */
     --grid: #232a33; --nav-h: 64px;
     /* Muscle-group colours: the dataviz reference categorical palette, dark steps, fixed order */
     --ss-0: #c98500; --ss-1: #199e70; --ss-2: #d55181;
@@ -62,7 +62,7 @@
   /* Shared bits */
   .primary {
     width: 100%; min-height: 56px; border: 0; border-radius: 14px; background: var(--accent);
-    color: #fff; font-size: 18px; font-weight: 700;
+    color: var(--on-accent); font-size: 18px; font-weight: 700;
   }
   .primary.sm { width: auto; min-height: 40px; padding: 0 18px; font-size: 16px; border-radius: 10px; }
   .secondary {
@@ -246,14 +246,14 @@
   .setno.t-failure { color: var(--danger); }
   .swipe { position: relative; overflow: hidden; border-radius: 10px; }
   .swipe .trash { position: absolute; inset: 0 0 0 auto; width: 76px; border: 0; border-radius: 10px;
-    background: var(--danger); color: #fff; font-size: 20px; visibility: hidden; }
+    background: var(--danger); color: var(--on-accent); font-size: 20px; visibility: hidden; }
   .swipe.open .trash, .swipe:has(.setrow[style*="translate"]) .trash { visibility: visible; }
   .swipe .setrow { position: relative; background: var(--bg); transition: transform .18s ease; touch-action: pan-y; }
   .swipe .setrow.done { background: #17271f; }
 
   /* Picker: multi-select */
-  .pkitem.sel { background: rgb(79 156 255 / .12); border-radius: 10px; }
-  .pkitem.sel .pkcheck { background: var(--accent); color: #fff; }
+  .pkitem.sel { background: var(--accent-soft); border-radius: 10px; }
+  .pkitem.sel .pkcheck { background: var(--accent); color: var(--on-accent); }
   .pkcheck { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--line);
     display: grid; place-items: center; font-size: 14px; font-weight: 700; }
   .pkitem small { font-size: 13px; }
@@ -271,17 +271,6 @@
     box-shadow: 0 8px 24px rgb(0 0 0 / .4);
   }
 
-  /* In-app confirm dialog */
-  .ask { position: fixed; inset: 0; z-index: 40; background: rgb(0 0 0 / .6); display: flex; align-items: flex-end;
-    justify-content: center; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
-  .ask[hidden] { display: none; }
-  .ask-box { width: 100%; max-width: 420px; background: var(--card); border: 1px solid var(--line); border-radius: 18px;
-    padding: 20px 16px 16px; box-shadow: 0 12px 32px rgb(0 0 0 / .5); }
-  .ask-t { font-size: 19px; font-weight: 700; }
-  .ask-box p { margin: 8px 0 0; color: var(--muted); font-size: 15px; line-height: 1.4; }
-  .ask-btns { display: flex; gap: 10px; margin-top: 20px; }
-  .ask-btns button { flex: 1; min-height: 52px; font-size: 16px; }
-  .danger-fill { background: var(--danger); color: #fff; }
 </style>
 </head>
 <body>
@@ -325,7 +314,6 @@
 <section class="sheet" id="exedit" hidden aria-label="Edit exercise"></section>
 <section class="sheet" id="settings" hidden aria-label="Settings"></section>
 <div class="toast" id="toast" role="status" hidden></div>
-<div class="ask" id="ask" hidden></div>
 
 <script type="module" src="/lifting/app.js"></script>
 </body>

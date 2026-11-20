@@ -2,6 +2,7 @@
 // All data goes through the Cortex core (saved on this device first, synced in the
 // background). The maths and data shaping live in the pure modules imported below.
 import * as cortex from "/core/cortex.js";
+import { ask as uiAsk, cancelAsk } from "/core/ui.js";
 import { e1rm, dayKey, personalRecords, prKind, sessionSeries } from "/lifting/stats.js";
 import { convert, showWeight, parseWeight, fmtNum } from "/lifting/units.js";
 import { MUSCLES, resolveExercises, exerciseFor, exerciseId, newKey } from "/lifting/library.js";
@@ -54,26 +55,8 @@ function fmtClock(ms) {
   return h ? `${h}:${p(m)}:${p(sec)}` : `${m}:${p(sec)}`;
 }
 
-// In-app confirm (DESIGN D41): replaces the browser's confirm(), which shows the site address
-// and is easy to tap through. Resolves true only on the red/blue button.
-let askDone = null;
-function ask(title, body = "", ok = "Delete", danger = true, no = "Cancel") {
-  askDone?.(false);
-  const el = $("ask");
-  el.innerHTML = `<div class="ask-box" role="alertdialog" aria-modal="true" aria-labelledby="ask-t">
-    <div class="ask-t" id="ask-t">${esc(title)}</div>${body ? `<p>${esc(body)}</p>` : ""}
-    <div class="ask-btns"><button class="secondary" data-a="0">${esc(no)}</button>
-      <button class="primary${danger ? " danger-fill" : ""}" data-a="1">${esc(ok)}</button></div></div>`;
-  el.hidden = false;
-  el.querySelector('[data-a="0"]').focus();
-  return new Promise((res) => { askDone = (v) => { el.hidden = true; askDone = null; res(v); }; });
-}
-$("ask").addEventListener("click", (ev) => {
-  if (!askDone) return;
-  const b = ev.target.closest("[data-a]");
-  if (b) askDone(b.dataset.a === "1");
-  else if (ev.target.id === "ask") askDone(false); // tap outside = cancel
-});
+// In-app confirm (DESIGN D41), shared by all apps in /core/ui.js. Lifting's calls default to a red "Delete".
+const ask = (title, body = "", ok = "Delete", danger = true, no = "Cancel") => uiAsk(title, body, { yes: ok, no, danger });
 
 let toastTimer;
 function toast(text) {
@@ -237,7 +220,7 @@ function openOverlay(ui) {
 
 addEventListener("popstate", (ev) => {
   const ui = ev.state?.ui;
-  if (askDone) askDone(false); // back gesture cancels an open question
+  cancelAsk(); // back gesture cancels an open question
   while (stack.length && stack.at(-1) !== ui) $(OVERLAYS[stack.pop()]).hidden = true;
   if (!editor && !ui) document.body.style.overflow = "";
   if (editor && !ui) {
@@ -794,7 +777,7 @@ function radarSvg(groups) {
   return `<div class="radar"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Sets per muscle group: ${GROUPS.map((g) => `${GROUP_LABEL[g]} ${fmtNum(groups[g])}`).join(", ")}">
     ${[0.25, 0.5, 0.75, 1].map((f) => `<polygon points="${ring(f)}" fill="none" stroke="var(--grid)" stroke-width="1"/>`).join("")}
     ${GROUPS.map((_, i) => { const [x, y] = pt(i, 1); return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--grid)" stroke-width="1"/>`; }).join("")}
-    <polygon points="${shape}" fill="rgb(79 156 255 / .22)" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
+    <polygon points="${shape}" fill="rgb(255 46 136 / .22)" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
     ${vals.map((v, i) => { const [x, y] = pt(i, v / max); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="var(--accent)" stroke="var(--bg)" stroke-width="2"/>`; }).join("")}
     ${labels}
   </svg></div>`;
