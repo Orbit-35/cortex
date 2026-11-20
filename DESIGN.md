@@ -241,6 +241,7 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Why:** no ads, offline, private. Phone voice processing (echo cancellation, noise suppression, auto gain) is turned off because it treats a sustained note as noise. YIN avoids octave errors on guitar tones, whose overtones are often louder than the fundamental (tested down to a 30% fundamental, within 1 cent).
 - **Details:** no `entries` are written; the chosen tuning and A4 are per-device preferences in `localStorage`. The mic is released when the app goes to the background (battery, privacy) and picked up again on return. The screen is kept awake while tuning.
 - **Trade-off:** the microphone needs HTTPS, so it works through the Tailscale address or on localhost, not plain `http://<ip>:8000`.
+- **Known limit (tested on the phone):** if Android's microphone permission for Chrome is set to "Ask every time", Chrome refuses every site's microphone without showing any question (`NotAllowedError`, site permission still "prompt"). It works with Chrome set to "Allow only while using the app". The native Android app (Capacitor) fixes this properly: Cortex gets its own microphone permission, which Android can ask for every time.
 
 ## Security and hosting
 
