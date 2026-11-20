@@ -56,8 +56,10 @@ Control audio precisely, track listening, and protect hearing.
 ## Guitar
 
 - **Tuner, no ads (built, DESIGN D43):** listens through the microphone and shows the note and how many cents sharp or flat. Standard tuning plus drop D, half-step down and custom tunings. *How:* works as a web page today, using the microphone and a pitch-detection algorithm (YIN or autocorrelation). Offline, private, no ads. One of the easiest ideas on this list.
-- **Song lists:** songs you can play, songs you're learning (with progress, notes, tabs/links), and a wishlist, linked to **Spotify** playlists. *How:* Spotify's API (log in once with your account) can create and read playlists, so "Can play" and "Learning" could be real playlists you listen to.
-- **Practice log:** minutes practised, what you worked on, streaks. Same pattern as workouts.
+- **Songs + practice log (next, build together):** guitar gets bottom tabs (Tuner, Songs, Practice).
+  - *Song:* status (Can play / Learning with a progress level / Want to learn), tuning (incl. custom) + capo with a tap to switch the tuner, links (tabs, lessons), notes, and later a Spotify link.
+  - *Practice session:* duration, what you worked on, which songs, notes; streaks and totals. Same pattern as workouts.
+- **Spotify (researched Nov 2026):** since Feb 2026, a Development Mode app needs the developer's account to have **Spotify Premium**, allows at most **5 users**, and loses some endpoints (new releases, artist top tracks, other users' profiles…). Reading and creating your own playlists still works (some playlist fields were renamed in the Feb 2026 migration). Enough for a personal "Can play / Learning" playlist sync; opening it to many users would need Spotify's extended quota. Login uses OAuth (PKCE), so the server must keep the refresh token out of the repo.
 
 ## Media (needs more thought)
 
@@ -78,6 +80,7 @@ Control audio precisely, track listening, and protect hearing.
 
 ## Platform
 
-- **Standalone apps:** Android (Capacitor) and Windows (Tauri) over the same core. See DESIGN.md, "Future: standalone apps". Several ideas above (text-selection menu, PC shortcut, audio control, rest-timer notifications) need these.
+- **Standalone apps:** Android (Capacitor) and Windows (Tauri) over the same core.
+  - *Android research (Nov 2026):* Capacitor 8 needs Android Studio Otter (2025.2.1+), which brings its own JDK 21; Android 7+ (our phone is 13). Not installed on the PC yet (~10 GB). The app gets its **own** microphone permission (manifest `RECORD_AUDIO`, granted through the WebView's permission request), so "Ask every time" works for Cortex itself. getUserMedia needs a secure origin: either bundled files (`https://localhost`) or `server.url` pointing at the HTTPS Tailscale address; plain HTTP breaks the mic. Option A, `server.url` = Tailscale address: updates are instant like the web app, but the first launch needs the PC reachable. Option B, bundled files: works fully offline, needs CORS on the API and a rebuild/reinstall per change. Start with A while the app changes daily. See DESIGN.md, "Future: standalone apps". Several ideas above (text-selection menu, PC shortcut, audio control, rest-timer notifications) need these.
 - **Login and other people:** accounts, each person's data kept separate. Needed before anyone else uses Cortex and before the standalone apps can sync.
 - **Always-on server:** Raspberry Pi or a hosted server, so sync doesn't depend on the PC being on.
