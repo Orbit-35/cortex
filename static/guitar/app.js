@@ -163,7 +163,7 @@ function show(freq) {
   $("status").innerHTML = state === "in" ? `${ICON.check} In tune`
     : cents < 0 ? `${ICON.up} Tune up` : `${ICON.down} Tune down`;
   const rc = Math.round(cents) || 0; // no "-0"
-  $("cents").innerHTML = `${rc > 0 ? "+" : rc < 0 ? "−" : ""}${Math.abs(rc)}¢<small>${freq.toFixed(1)} Hz</small>`;
+  $("cents").innerHTML = `${rc > 0 ? "+" : rc < 0 ? "−" : ""}${Math.abs(rc)}<span class="u">cents</span><small>${freq.toFixed(1)} Hz</small>`;
 
   if (state === "in" && current !== null) {
     if (!inTuneSince) inTuneSince = performance.now();

@@ -72,8 +72,7 @@
   .stage.state-near { --st: var(--warn); }
   .stage.state-in { --st: var(--good); }
   .stage.state-idle { --st: var(--muted); }
-  .meter { width: 100%; max-width: 500px; background: radial-gradient(120% 90% at 50% 100%, var(--card) 0%, var(--bg) 70%);
-    border: 1px solid var(--line); border-radius: 24px; padding: 10px 6px 0; }
+  .meter { width: 100%; max-width: 500px; margin-inline: -8px; }
   .gauge { display: block; width: 100%; overflow: visible; }
   .gauge .tk { stroke: var(--muted); stroke-linecap: round; opacity: .45; }
   .gauge .tk.m5 { opacity: .7; }
@@ -100,7 +99,8 @@
   .state-idle .note { color: var(--line); }
   .state-in .note { color: var(--good); }
   .cents { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--st); min-height: 38px; line-height: 38px; transition: color .2s; }
-  .cents small { font-size: 15px; color: var(--muted); font-weight: 500; margin-left: 8px; }
+  .cents .u { font-size: 15px; font-weight: 600; margin-left: 4px; }
+  .cents small { font-size: 15px; color: var(--muted); font-weight: 500; margin-left: 10px; }
   .lights { display: flex; align-items: center; gap: 12px; }
   .led { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--card); border: 1px solid var(--line);
     color: var(--line); transition: background .15s, color .15s, box-shadow .15s; }
