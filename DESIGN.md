@@ -236,12 +236,17 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Why:** lifting is opened mid-gym and should stay one tap away; other apps are one extra tap or a long-press. One installed app (not one per module) matches the "phone OS + apps" idea.
 - **Trade-off:** Android refreshes an installed app's shortcuts only when it re-reads the manifest (can take a day, or reinstall).
 
-### D43. Guitar tuner runs entirely on the device and stores nothing
+### D43. Guitar tuner runs entirely on the device and stores nothing (storage part superseded by D44)
 - **Decision:** `static/guitar/`: microphone → Web Audio analyser (4096 samples, ~85 ms) → YIN pitch detection (`pitch.js`) ~30 times a second → median of the last 5 readings → cents off the target string (`music.js`). Tunings: standard, drop D, half/whole step down, drop C, open G/D, DADGAD, chromatic. A4 reference adjustable 430–450 Hz. Auto mode picks the closest string; tapping a string locks it. A string held within ±3 cents for 0.5 s is marked tuned. "Hear" plays a soft reference pluck, and detection pauses while it sounds.
 - **Why:** no ads, offline, private. Phone voice processing (echo cancellation, noise suppression, auto gain) is turned off because it treats a sustained note as noise. YIN avoids octave errors on guitar tones, whose overtones are often louder than the fundamental (tested down to a 30% fundamental, within 1 cent).
 - **Details:** no `entries` are written; the chosen tuning and A4 are per-device preferences in `localStorage`. The mic is released when the app goes to the background (battery, privacy) and picked up again on return. The screen is kept awake while tuning.
 - **Trade-off:** the microphone needs HTTPS, so it works through the Tailscale address or on localhost, not plain `http://<ip>:8000`.
 - **Known limit (tested on the phone):** if Android's microphone permission for Chrome is set to "Ask every time", Chrome refuses every site's microphone without showing any question (`NotAllowedError`, site permission still "prompt"). It works with Chrome set to "Allow only while using the app". The native Android app (Capacitor) fixes this properly: Cortex gets its own microphone permission, which Android can ask for every time.
+
+### D44. Tuning picker behind a button; custom tunings sync as entries
+- **Decision:** the tuning list moved from a chip row at the top into a bottom sheet opened by a button showing the current tuning (top right). Chromatic is listed first, then the guitar presets, then "Your tunings" and "New custom tuning". A custom tuning has a name and 4–8 strings, each set with −/+ in semitones (B0 to G5), starting from the tuning in use; tapping a note plays it. Custom tunings are entries: `module=guitar`, `metric=_tuning`, id `tuning:<uuid>`, `data={name, notes:["E2", …]}` (low to high, sharps). Deleting one needs a second tap.
+- **Why:** the owner found the chip row cluttered. Custom tunings are worth keeping across devices and reinstalls, unlike the per-device choice of tuning and A4 (still `localStorage`).
+- **Trade-off:** sharps only in custom tunings (E♭ shows as D♯).
 
 ## Security and hosting
 

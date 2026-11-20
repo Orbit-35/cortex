@@ -30,10 +30,45 @@
   .iconbtn { background: none; border: 0; width: 44px; height: 44px; display: grid; place-items: center; color: var(--text); border-radius: 12px; text-decoration: none; }
   .iconbtn:active { background: var(--card); }
 
-  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 6px 0 4px; scrollbar-width: none; margin-inline: -16px; padding-inline: 16px; }
-  .chips::-webkit-scrollbar { display: none; }
-  .chip { flex: none; font-size: 15px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; min-height: 40px; white-space: nowrap; }
-  .chip.on { border-color: var(--accent); color: var(--accent); }
+  .tunbtn { display: flex; align-items: center; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+    padding: 0 10px 0 16px; min-height: 42px; font-size: 15px; font-weight: 600; max-width: 55%; }
+  .tunbtn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tunbtn svg { width: 18px; height: 18px; flex: none; color: var(--muted); }
+
+  /* Bottom sheets: tuning list and custom tuning editor */
+  .sheet { position: fixed; inset: 0; z-index: 20; background: rgb(0 0 0 / .55); display: flex; align-items: flex-end; justify-content: center; }
+  .panel { width: 100%; max-width: 520px; max-height: 88dvh; overflow-y: auto; background: var(--bg); border: 1px solid var(--line); border-bottom: 0;
+    border-radius: 20px 20px 0 0; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); }
+  .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 4px auto 10px; }
+  .panel h2 { font-size: 20px; margin: 0 0 8px; }
+  .panel h3 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 16px 0 6px; text-transform: uppercase; letter-spacing: .04em; }
+  .trow { display: flex; align-items: center; gap: 4px; border-radius: 12px; }
+  .trow:active { background: var(--card); }
+  .pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 12px; background: none; border: 0; text-align: left; }
+  .pick .t { flex: 1; min-width: 0; }
+  .pick b { display: block; font-weight: 600; }
+  .pick small { color: var(--muted); font-size: 14px; letter-spacing: .03em; }
+  .trow.on b { color: var(--accent); }
+  .mark { width: 22px; height: 22px; color: var(--accent); flex: none; display: grid; place-items: center; }
+  .edit { flex: none; width: 44px; height: 44px; display: grid; place-items: center; background: none; border: 0; color: var(--muted); border-radius: 10px; }
+  .addrow { color: var(--accent); font-weight: 600; }
+  .field { display: block; font-size: 13px; color: var(--muted); margin: 8px 0 14px; }
+  .field input { display: block; width: 100%; margin-top: 6px; font: inherit; font-size: 17px; color: var(--text); background: var(--card);
+    border: 1px solid var(--line); border-radius: 12px; padding: 12px; -webkit-user-select: text; user-select: text; }
+  .field input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .srow { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .srow .lab { flex: 1; font-size: 15px; color: var(--muted); }
+  .step { display: flex; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  .step button { width: 44px; height: 44px; background: none; border: 0; font-size: 22px; }
+  .step .nt { min-width: 64px; width: auto; height: 44px; display: grid; place-items: center; font-size: 18px; font-weight: 700; }
+  .step .nt sub { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .countrow { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 6px; font-size: 15px; }
+  .actions { display: flex; gap: 10px; margin-top: 18px; }
+  .actions button { flex: 1; min-height: 52px; border-radius: 14px; font-size: 16px; font-weight: 700; }
+  .btn2 { background: var(--card); border: 1px solid var(--line); }
+  .btn1 { background: var(--accent); border: 0; color: #fff; }
+  .btndel { background: none; border: 0; color: var(--danger); min-height: 48px; width: 100%; margin-top: 8px; font-weight: 600; border-radius: 14px; }
+  .btndel.armed { background: var(--danger); color: #fff; }
 
   .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 12px 0; }
   .gauge { width: 100%; max-width: 380px; }
@@ -82,8 +117,11 @@
   <div class="top">
     <a class="iconbtn" href="/" aria-label="All apps"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg></a>
     <h1>Tuner</h1>
+    <button class="tunbtn" id="tunbtn" aria-haspopup="dialog">
+      <span id="tunname">Standard</span>
+      <svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
   </div>
-  <div class="chips" id="tunings" role="tablist" aria-label="Tuning"></div>
 
   <div class="stage state-idle" id="stage">
     <svg class="gauge" viewBox="0 0 380 215" aria-hidden="true" id="gauge"></svg>
@@ -107,6 +145,9 @@
     </button>
   </div>
 </div>
+
+<div class="sheet" id="picker" hidden role="dialog" aria-modal="true" aria-label="Choose tuning"><div class="panel" id="pickerpanel"></div></div>
+<div class="sheet" id="editor" hidden role="dialog" aria-modal="true" aria-label="Custom tuning"><div class="panel" id="editorpanel"></div></div>
 
 <div class="start" id="start">
   <svg class="i" viewBox="0 0 24 24" style="width:56px;height:56px;color:var(--accent)"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>

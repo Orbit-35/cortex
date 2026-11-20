@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { detectPitch } from "../static/guitar/pitch.js";
-import { parseNote, midiToFreq, nearestNote, closestString, centsOff, median, TUNINGS, display } from "../static/guitar/music.js";
+import { noteText, parseNote, midiToFreq, nearestNote, closestString, centsOff, median, TUNINGS, display } from "../static/guitar/music.js";
 
 const SR = 48000;
 // A guitar-like tone: fundamental plus louder overtones, so octave mistakes would show up.
@@ -16,6 +16,9 @@ assert.equal(parseNote("E2"), 40);
 assert.equal(parseNote("Eb2"), 39);
 assert.equal(parseNote("F#3"), 54);
 assert.deepEqual(display("Bb3"), { name: "B♭", octave: 3 });
+for (let m = 20; m < 90; m++) assert.equal(parseNote(noteText(m)), m);
+assert.equal(noteText(40), "E2");
+assert.equal(TUNINGS[0].id, "chromatic");
 assert.ok(Math.abs(midiToFreq(40) - 82.4069) < 0.001);
 assert.ok(Math.abs(midiToFreq(69, 432) - 432) < 1e-9);
 

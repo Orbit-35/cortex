@@ -32,8 +32,9 @@ export function nearestNote(freq, a4 = 440) {
   };
 }
 
-// Strings listed low (6th) to high (1st).
+// Strings listed low (thickest) to high. Chromatic first: it's the "any note" mode.
 export const TUNINGS = [
+  { id: "chromatic", name: "Chromatic", notes: [] },
   { id: "standard", name: "Standard", notes: ["E2", "A2", "D3", "G3", "B3", "E4"] },
   { id: "dropd", name: "Drop D", notes: ["D2", "A2", "D3", "G3", "B3", "E4"] },
   { id: "half", name: "Half step down", notes: ["Eb2", "Ab2", "Db3", "Gb3", "Bb3", "Eb4"] },
@@ -42,8 +43,11 @@ export const TUNINGS = [
   { id: "openg", name: "Open G", notes: ["D2", "G2", "D3", "G3", "B3", "D4"] },
   { id: "opend", name: "Open D", notes: ["D2", "A2", "D3", "F#3", "A3", "D4"] },
   { id: "dadgad", name: "DADGAD", notes: ["D2", "A2", "D3", "G3", "A3", "D4"] },
-  { id: "chromatic", name: "Chromatic", notes: [] },
 ];
+
+// MIDI number -> stored note text ("D#2"), the inverse of parseNote. Custom tunings use sharps.
+const PLAIN = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+export const noteText = (midi) => PLAIN[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1);
 
 // Index of the string whose target pitch is closest (in cents) to freq.
 export function closestString(freq, notes, a4 = 440) {
