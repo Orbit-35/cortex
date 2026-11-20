@@ -146,17 +146,27 @@ async function start() {
     msg.innerHTML = `<span class="err">The microphone needs a secure page. Open Cortex through its Tailscale (https) address.</span>`;
     return;
   }
+  let state = "unknown";
+  try { state = (await navigator.permissions.query({ name: "microphone" })).state; } catch {}
+  msg.textContent = `Asking for the microphone… (site setting: ${state})`;
+  const slow = setTimeout(() => {
+    msg.innerHTML = `<span class="err">Still waiting for an answer about the microphone, but no question appeared. (site setting: ${state})</span>`;
+  }, 4000);
   try {
     // Phone voice processing would treat a guitar note as noise and squash it: turn it all off.
     stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
     });
   } catch (err) {
+    clearTimeout(slow);
+    // Which layer said no: Chrome's per-site setting ("denied") or something below it ("prompt"/"granted").
+    const why = `${err.message}; site setting: ${state}`; // DOMException.message is read-only
     msg.innerHTML = `<span class="err">${err.name === "NotAllowedError"
-      ? "Microphone access is blocked. Installed web apps get it through Chrome: open Chrome → ⋮ → Settings → Site settings → Microphone, find the Cortex address and set it to Allow. Also check Android Settings → Apps → Chrome → Permissions → Microphone is allowed. Then reopen Cortex."
-      : "Couldn't open the microphone: " + err.message}</span>`;
+      ? "Microphone access is blocked. Installed web apps get it through Chrome: open Chrome → ⋮ → Settings → Site settings → Microphone, find the Cortex address and set it to Allow. Also check Android Settings → Apps → Chrome → Permissions → Microphone is allowed. Then reopen Cortex. (Chrome says: " + why + ")"
+      : "Couldn't open the microphone: " + why}</span>`;
     return;
   }
+  clearTimeout(slow);
   ctx = ctx && ctx.state !== "closed" ? ctx : new AudioContext();
   if (ctx.state === "suspended") await ctx.resume();
   analyser = ctx.createAnalyser();
