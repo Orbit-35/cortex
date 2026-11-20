@@ -40,61 +40,27 @@ const escHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCod
 
 // ---------- Static UI ----------
 
-// Meter geometry: the needle pivots at (CX, CY); the scale is an arc of radius R spanning 2 x SWEEP degrees
-// for -50..+50 cents.
-const CX = 200, CY = 214, R = 176, SWEEP = 62;
-const rad = (c) => ((Math.max(-50, Math.min(50, c)) / 50) * SWEEP - 90) * Math.PI / 180;
-const pt = (c, r = R) => [CX + r * Math.cos(rad(c)), CY + r * Math.sin(rad(c))];
-const f1 = (n) => n.toFixed(1);
-function arc(c1, c2, r = R) { // c1 < c2, drawn clockwise
-  const [x1, y1] = pt(c1, r), [x2, y2] = pt(c2, r);
-  return `M${f1(x1)} ${f1(y1)}A${r} ${r} 0 0 1 ${f1(x2)} ${f1(y2)}`;
-}
-
 function drawGauge() {
-  let s = `<defs><filter id="blur" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="9"/></filter></defs>`;
-  // Coloured zones just inside the ticks: pink far, amber close, green in tune.
-  const zones = [[-50, -NEAR, "far"], [-NEAR, -IN_TUNE, "near"], [-IN_TUNE, IN_TUNE, "in"], [IN_TUNE, NEAR, "near"], [NEAR, 50, "far"]];
-  for (const [a, b, k] of zones) s += `<path class="zone z-${k}" d="${arc(a, b, R - 16)}"/>`;
-  // Ticks every cent; longer every 5, longest with a number every 10.
-  for (let c = -50; c <= 50; c++) {
-    const kind = c === 0 ? "m0" : c % 10 === 0 ? "m10" : c % 5 === 0 ? "m5" : "";
-    const len = c === 0 ? 22 : c % 10 === 0 ? 16 : c % 5 === 0 ? 11 : 6;
-    const [x1, y1] = pt(c, R - 8), [x2, y2] = pt(c, R - 8 + len);
-    s += `<line class="tk ${kind}" stroke-width="${kind ? "" : 1.2}" x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}"/>`;
-    if (c % 10 === 0) {
-      const [x, y] = pt(c, R + 26);
-      s += `<text class="num${c ? "" : " zero"}" x="${f1(x)}" y="${f1(y + 4)}">${c > 0 ? "+" + c : c}</text>`;
-    }
-  }
-  const [lx, ly] = pt(-50, R - 40), [rx, ry] = pt(50, R - 40);
-  s += `<text class="sym" x="${f1(lx + 8)}" y="${f1(ly + 8)}">♭</text><text class="sym" x="${f1(rx - 8)}" y="${f1(ry + 8)}">♯</text>`;
-  // Needle: tapered, with a short tail past the pivot, a soft glow, and a cap over the pivot.
-  s += `<g id="needle">
-    <polygon class="glow" filter="url(#blur)" points="${CX - 5},${CY} ${CX},${CY - R + 2} ${CX + 5},${CY}"/>
-    <polygon class="needle" points="${CX - 5},${CY + 18} ${CX - 3.2},${CY} ${CX - 0.9},${CY - R + 4} ${CX + 0.9},${CY - R + 4} ${CX + 3.2},${CY} ${CX + 5},${CY + 18}"/>
-  </g><circle class="cap" cx="${CX}" cy="${CY}" r="13"/><circle class="capdot" cx="${CX}" cy="${CY}" r="4"/>`;
-  $("gauge").innerHTML = s;
-}
-
-// The needle moves like a real meter: a spring pulls it to the reading, with a little overshoot
-// that settles in a few frames. At rest (nothing heard) it returns to the centre, dimmed.
-let targetCents = null, pos = 0, vel = 0;
-function drawMeter() {
-  const goal = targetCents == null ? 0 : Math.max(-52, Math.min(52, targetCents));
-  vel = vel * 0.7 + (goal - pos) * 0.12;
-  pos += vel;
-  const deg = (Math.max(-52, Math.min(52, pos)) / 50) * SWEEP;
-  $("needle").setAttribute("transform", `rotate(${deg.toFixed(2)} ${CX} ${CY})`);
-}
-// Keep the needle animating while the mic is off (e.g. returning to centre).
-function idleAnimate() {
-  if (raf) return;
-  const step = () => {
-    drawMeter();
-    raf = Math.abs(pos) > 0.05 || Math.abs(vel) > 0.05 ? requestAnimationFrame(step) : 0;
+  // Semicircle from -50 to +50 cents. Needle pivots at (190, 200). (First version, D48.)
+  const cx = 190, cy = 200, r = 170;
+  const at = (c, rad) => {
+    const a = ((c / 50) * 60 - 90) * Math.PI / 180;
+    return [cx + rad * Math.cos(a), cy + rad * Math.sin(a)];
   };
-  raf = requestAnimationFrame(step);
+  let s = "";
+  for (let c = -50; c <= 50; c += 5) {
+    const major = c % 25 === 0;
+    const [x1, y1] = at(c, r - (major ? 22 : 12)), [x2, y2] = at(c, r);
+    s += `<line class="tick${major ? " major" : ""}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+  }
+  const [zx1, zy1] = at(-IN_TUNE, r + 10), [zx2, zy2] = at(IN_TUNE, r + 10);
+  s += `<path class="zone" d="M${zx1} ${zy1} A${r + 10} ${r + 10} 0 0 1 ${zx2} ${zy2}"/>`;
+  for (const c of [-50, -25, 25, 50]) {
+    const [x, y] = at(c, r - 38);
+    s += `<text class="lbl" x="${x}" y="${y + 4}">${c > 0 ? "+" : ""}${c}</text>`;
+  }
+  s += `<g class="needle idle" id="needle"><line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - r + 4}"/><circle cx="${cx}" cy="${cy}" r="9"/></g>`;
+  $("gauge").innerHTML = s;
 }
 
 function renderTunings() {
@@ -129,41 +95,38 @@ function renderA4() { $("a4").textContent = `A4 ${a4} Hz`; }
 // ---------- Live reading ----------
 
 function show(freq) {
-  const stage = $("stage");
+  const stage = $("stage"), needle = $("needle");
   if (freq == null) {
     stage.className = "stage state-idle";
-    targetCents = null;
+    needle.classList.add("idle");
+    needle.style.transform = "rotate(0deg)";
     $("note").textContent = "–";
-    $("nprev").textContent = $("nnext").textContent = "";
     $("status").textContent = tuning.notes.length ? "Play a string" : "Play a note";
-    $("cents").textContent = "";
+    $("readout").textContent = "";
     if (current !== null && locked === null) { current = null; renderStrings(); }
     return;
   }
-  let name, octave, cents, midi;
+  let name, octave, cents;
   if (!tuning.notes.length) {
-    ({ name, octave, cents, midi } = nearestNote(freq, a4));
+    ({ name, octave, cents } = nearestNote(freq, a4));
   } else {
     const i = locked ?? closestString(freq, tuning.notes, a4);
     if (i !== current) { current = i; inTuneSince = 0; renderStrings(); }
     const n = tuning.notes[i];
     ({ name, octave } = display(n));
-    midi = parseNote(n);
-    cents = centsOff(freq, midiToFreq(midi, a4));
+    cents = centsOff(freq, midiToFreq(parseNote(n), a4));
   }
-  // The notes either side: where the needle is heading if you go too far.
-  $("nprev").textContent = display(noteText(midi - 1)).name;
-  $("nnext").textContent = display(noteText(midi + 1)).name;
   const abs = Math.abs(cents);
   const state = abs <= IN_TUNE ? "in" : abs <= NEAR ? "near" : "far";
-  targetCents = cents;
-  stage.className = `stage state-${state} ${cents < 0 ? "flat" : "sharp"}`;
+  stage.className = `stage state-${state}`;
+  needle.classList.remove("idle");
+  needle.style.transform = `rotate(${(Math.max(-50, Math.min(50, cents)) / 50) * 60}deg)`;
   $("note").innerHTML = `${name}<sub>${octave}</sub>`;
   // Too low means the string is too loose: tighten (tune up).
   $("status").innerHTML = state === "in" ? `${ICON.check} In tune`
     : cents < 0 ? `${ICON.up} Tune up` : `${ICON.down} Tune down`;
   const rc = Math.round(cents) || 0; // no "-0"
-  $("cents").innerHTML = `${rc > 0 ? "+" : rc < 0 ? "−" : ""}${Math.abs(rc)}<span class="u">cents</span><small>${freq.toFixed(1)} Hz</small>`;
+  $("readout").textContent = `${freq.toFixed(1)} Hz · ${rc > 0 ? "+" : ""}${rc} cents`;
 
   if (state === "in" && current !== null) {
     if (!inTuneSince) inTuneSince = performance.now();
@@ -177,7 +140,6 @@ function show(freq) {
 
 function tickLoop() {
   raf = requestAnimationFrame(tickLoop);
-  drawMeter();
   if (++frame % 2) return; // ~30 readings a second is plenty and halves the CPU cost
   const now = performance.now();
   if (now < muteUntil) return; // ignore our own reference tone
@@ -265,7 +227,6 @@ function stop() {
   wake = null;
   recent = [];
   show(null);
-  idleAnimate();
 }
 
 // Release the mic when the app is in the background; pick it up again on return.
@@ -471,7 +432,6 @@ for (const [id, step] of [["a4down", -1], ["a4up", 1]]) {
 drawGauge(); renderTunings(); renderStrings(); renderA4();
 cortex.onChange(loadCustom);
 loadCustom().then(() => cortex.startAutoSync());
-drawMeter();
 start(); // straight into listening: the browser asks for the mic the first time
 
 keepUpdated(() => !draftDirty()); // don't reload away a half-made custom tuning

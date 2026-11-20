@@ -66,53 +66,29 @@
   .btn1 { background: var(--accent); border: 0; color: var(--on-accent); }
   .btndel { background: none; border: 0; color: var(--danger); min-height: 48px; width: 100%; margin-top: 8px; font-weight: 600; border-radius: 14px; }
 
-  /* The meter (D47): an analogue-style needle over a fine scale with green/amber/pink zones.
-     --st is the state colour: pink (far), amber (close), green (in tune). */
-  .stage { --st: var(--accent); flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 4px 0 8px; }
-  .stage.state-near { --st: var(--warn); }
-  .stage.state-in { --st: var(--good); }
-  .stage.state-idle { --st: var(--muted); }
-  .meter { width: 100%; max-width: 500px; margin-inline: -8px; }
-  .gauge { display: block; width: 100%; overflow: visible; }
-  .gauge .tk { stroke: var(--muted); stroke-linecap: round; opacity: .45; }
-  .gauge .tk.m5 { opacity: .7; }
-  .gauge .tk.m10 { stroke: var(--text); opacity: .85; stroke-width: 2.5; }
-  .gauge .tk.m0 { stroke: var(--good); opacity: 1; stroke-width: 3.5; }
-  .gauge .num { fill: var(--muted); font-size: 13px; text-anchor: middle; font-variant-numeric: tabular-nums; }
-  .gauge .num.zero { fill: var(--good); font-weight: 700; }
-  .gauge .zone { fill: none; stroke-width: 7; }
-  .gauge .z-far { stroke: var(--accent); opacity: .35; }
-  .gauge .z-near { stroke: var(--warn); opacity: .55; }
-  .gauge .z-in { stroke: var(--good); opacity: .9; }
-  .gauge .sym { fill: var(--muted); font-size: 22px; text-anchor: middle; font-weight: 600; }
-  .gauge .needle { fill: var(--st); transition: fill .2s; }
-  .gauge .glow { fill: var(--st); opacity: 0; transition: opacity .25s, fill .2s; }
-  .state-in .gauge .glow { opacity: .35; }
-  .state-idle .gauge .needle { opacity: .35; }
-  .gauge .cap { fill: var(--card2); stroke: var(--st); stroke-width: 3; transition: stroke .2s; }
-  .gauge .capdot { fill: var(--st); transition: fill .2s; }
+  /* The meter: the first version's needle gauge (D48). */
+  .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 12px 0; }
+  .gauge { width: 100%; max-width: 380px; }
+  .gauge .tick { stroke: var(--line); stroke-width: 2; }
+  .gauge .tick.major { stroke: var(--muted); stroke-width: 3; }
+  .gauge .zone { stroke: var(--good); stroke-width: 10; fill: none; stroke-linecap: round; opacity: .35; }
+  .gauge .lbl { fill: var(--muted); font-size: 13px; text-anchor: middle; }
+  .needle { transition: transform .12s linear; transform-origin: 190px 200px; }
+  .needle line { stroke: var(--text); stroke-width: 4; stroke-linecap: round; }
+  .needle circle { fill: var(--text); }
+  .needle.idle line, .needle.idle circle { stroke: var(--line); fill: var(--line); }
+  .state-in .needle line { stroke: var(--good); } .state-in .needle circle { fill: var(--good); }
+  .state-near .needle line { stroke: var(--warn); } .state-near .needle circle { fill: var(--warn); }
 
-  .notes { display: flex; align-items: center; justify-content: center; gap: 22px; margin-top: 4px; }
-  .nb { font-size: 22px; font-weight: 700; color: var(--muted); opacity: .55; min-width: 40px; text-align: center; }
-  .note { font-size: clamp(76px, 24vw, 108px); font-weight: 800; line-height: 1; display: flex; align-items: baseline; transition: color .2s; }
-  .note sub { font-size: .3em; font-weight: 600; color: var(--muted); margin-left: 3px; vertical-align: baseline; }
-  .state-idle .note { color: var(--line); }
+  .note { font-size: 96px; font-weight: 800; line-height: 1; margin-top: 4px; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; }
+  .note sub { font-size: 30px; font-weight: 600; color: var(--muted); margin-left: 2px; vertical-align: baseline; }
   .state-in .note { color: var(--good); }
-  .cents { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--st); min-height: 38px; line-height: 38px; transition: color .2s; }
-  .cents .u { font-size: 15px; font-weight: 600; margin-left: 4px; }
-  .cents small { font-size: 15px; color: var(--muted); font-weight: 500; margin-left: 10px; }
-  .lights { display: flex; align-items: center; gap: 12px; }
-  .led { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--card); border: 1px solid var(--line);
-    color: var(--line); transition: background .15s, color .15s, box-shadow .15s; }
-  .led svg { width: 22px; height: 22px; }
-  .state-far.flat .led.l, .state-near.flat .led.l, .state-far.sharp .led.r, .state-near.sharp .led.r {
-    color: var(--on-accent); background: var(--st); border-color: transparent; box-shadow: 0 0 18px var(--st); }
-  .status { min-width: 150px; font-size: 18px; font-weight: 700; min-height: 44px; padding: 0 16px; border-radius: 999px; display: flex; align-items: center;
-    justify-content: center; gap: 6px; color: var(--muted); background: var(--card); border: 1px solid var(--line); transition: background .2s, color .2s; }
-  .state-far .status, .state-near .status { color: var(--st); }
-  .state-in .status { color: var(--on-accent); background: var(--good); border-color: transparent; box-shadow: 0 0 20px rgb(76 195 138 / .45); }
-  .status svg { width: 20px; height: 20px; }
-  .micmsg { font-size: 14px; color: var(--muted); text-align: center; max-width: 340px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .status { font-size: 20px; font-weight: 700; min-height: 30px; display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .state-in .status { color: var(--good); }
+  .state-near .status, .state-far .status { color: var(--text); }
+  .status svg { width: 22px; height: 22px; }
+  .readout { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; min-height: 20px; }
+  .micmsg { font-size: 14px; color: var(--muted); text-align: center; max-width: 340px; display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 8px; }
   .micmsg .err { color: var(--danger); }
   .micmsg button { min-height: 44px; padding: 0 20px; border: 0; border-radius: 12px; background: var(--accent); color: var(--on-accent); font-weight: 700; }
 
@@ -144,14 +120,10 @@
   </div>
 
   <div class="stage state-idle" id="stage">
-    <div class="meter"><svg class="gauge" viewBox="0 0 400 226" aria-hidden="true" id="gauge"></svg></div>
-    <div class="notes"><span class="nb" id="nprev"></span><div class="note" id="note" aria-live="polite">–</div><span class="nb" id="nnext"></span></div>
-    <div class="cents" id="cents"></div>
-    <div class="lights">
-      <span class="led l" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></span>
-      <div class="status" id="status">Play a string</div>
-      <span class="led r" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
-    </div>
+    <svg class="gauge" viewBox="0 0 380 215" aria-hidden="true" id="gauge"></svg>
+    <div class="note" id="note" aria-live="polite">–</div>
+    <div class="status" id="status">Play a string</div>
+    <div class="readout" id="readout"></div>
     <div class="micmsg" id="micmsg" hidden></div>
   </div>
 
