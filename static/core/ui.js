@@ -74,3 +74,21 @@ export function toast(text, ms = 3200) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => (toastEl.hidden = true), ms);
 }
+
+// Register the service worker and reload into a new version as soon as it's installed (DESIGN D36).
+// canReload() can say "not now" (e.g. unsaved typing); the update then loads on the next open.
+export function keepUpdated(canReload = () => true) {
+  if (!("serviceWorker" in navigator)) return;
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("/sw.js").then((reg) => {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") reg.update().catch(() => {});
+    });
+  }).catch((err) => console.warn("No service worker:", err));
+  let reloading = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || reloading || !canReload()) return; // first install: this page is already current
+    reloading = true;
+    location.reload();
+  });
+}

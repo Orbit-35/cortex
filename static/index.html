@@ -38,6 +38,6 @@
     </a>
   </div>
 </div>
-<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});</script>
+<script type="module">import { keepUpdated } from "/core/ui.js"; keepUpdated();</script>
 </body>
 </html>

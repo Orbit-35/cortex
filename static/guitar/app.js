@@ -1,7 +1,7 @@
 // Guitar tuner page. Audio stays on the device: the mic feeds an analyser, nothing is recorded or sent.
 // Custom tunings are Cortex entries (module=guitar, metric=_tuning), so they sync like everything else (D44).
 import * as cortex from "/core/cortex.js";
-import { ask, cancelAsk, toast } from "/core/ui.js";
+import { ask, cancelAsk, toast, keepUpdated } from "/core/ui.js";
 import { detectPitch } from "./pitch.js";
 import { TUNINGS, noteText, parseNote, midiToFreq, centsOff, nearestNote, closestString, median, display } from "./music.js";
 
@@ -40,8 +40,9 @@ const escHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCod
 
 // ---------- Static UI ----------
 
-// Meter geometry: an arc of 2 x SWEEP degrees for -50..+50 cents, centred on (CX, CY).
-const CX = 200, CY = 214, R = 168, SWEEP = 66;
+// Meter geometry: the needle pivots at (CX, CY); the scale is an arc of radius R spanning 2 x SWEEP degrees
+// for -50..+50 cents.
+const CX = 200, CY = 214, R = 176, SWEEP = 62;
 const rad = (c) => ((Math.max(-50, Math.min(50, c)) / 50) * SWEEP - 90) * Math.PI / 180;
 const pt = (c, r = R) => [CX + r * Math.cos(rad(c)), CY + r * Math.sin(rad(c))];
 const f1 = (n) => n.toFixed(1);
@@ -51,28 +52,49 @@ function arc(c1, c2, r = R) { // c1 < c2, drawn clockwise
 }
 
 function drawGauge() {
-  let s = `<defs><filter id="blur" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="7"/></filter></defs>`;
-  for (let c = -50; c <= 50; c += 5) {
-    const kind = c === 0 ? " zero" : c % 25 === 0 ? " major" : "";
-    const [x1, y1] = pt(c, R + 20), [x2, y2] = pt(c, R + (c === 0 ? 38 : kind ? 32 : 26));
-    s += `<line class="tick${kind}" x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}"/>`;
+  let s = `<defs><filter id="blur" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="9"/></filter></defs>`;
+  // Coloured zones just inside the ticks: pink far, amber close, green in tune.
+  const zones = [[-50, -NEAR, "far"], [-NEAR, -IN_TUNE, "near"], [-IN_TUNE, IN_TUNE, "in"], [IN_TUNE, NEAR, "near"], [NEAR, 50, "far"]];
+  for (const [a, b, k] of zones) s += `<path class="zone z-${k}" d="${arc(a, b, R - 16)}"/>`;
+  // Ticks every cent; longer every 5, longest with a number every 10.
+  for (let c = -50; c <= 50; c++) {
+    const kind = c === 0 ? "m0" : c % 10 === 0 ? "m10" : c % 5 === 0 ? "m5" : "";
+    const len = c === 0 ? 22 : c % 10 === 0 ? 16 : c % 5 === 0 ? 11 : 6;
+    const [x1, y1] = pt(c, R - 8), [x2, y2] = pt(c, R - 8 + len);
+    s += `<line class="tk ${kind}" stroke-width="${kind ? "" : 1.2}" x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}"/>`;
+    if (c % 10 === 0) {
+      const [x, y] = pt(c, R + 26);
+      s += `<text class="num${c ? "" : " zero"}" x="${f1(x)}" y="${f1(y + 4)}">${c > 0 ? "+" + c : c}</text>`;
+    }
   }
-  s += `<path class="track" d="${arc(-50, 50)}"/><path class="zone" d="${arc(-IN_TUNE, IN_TUNE)}"/>`;
-  s += `<path class="band" id="gband"/><circle class="halo" id="ghalo" r="24" filter="url(#blur)"/><circle class="dot" id="gdot" r="16"/>`;
-  const [lx, ly] = pt(-50, R), [rx, ry] = pt(50, R);
-  s += `<text class="sym" x="${f1(lx)}" y="${f1(ly + 44)}">♭</text><text class="sym" x="${f1(rx)}" y="${f1(ry + 44)}">♯</text>`;
+  const [lx, ly] = pt(-50, R - 40), [rx, ry] = pt(50, R - 40);
+  s += `<text class="sym" x="${f1(lx + 8)}" y="${f1(ly + 8)}">♭</text><text class="sym" x="${f1(rx - 8)}" y="${f1(ry + 8)}">♯</text>`;
+  // Needle: tapered, with a short tail past the pivot, a soft glow, and a cap over the pivot.
+  s += `<g id="needle">
+    <polygon class="glow" filter="url(#blur)" points="${CX - 5},${CY} ${CX},${CY - R + 2} ${CX + 5},${CY}"/>
+    <polygon class="needle" points="${CX - 5},${CY + 18} ${CX - 3.2},${CY} ${CX - 0.9},${CY - R + 4} ${CX + 0.9},${CY - R + 4} ${CX + 3.2},${CY} ${CX + 5},${CY + 18}"/>
+  </g><circle class="cap" cx="${CX}" cy="${CY}" r="13"/><circle class="capdot" cx="${CX}" cy="${CY}" r="4"/>`;
   $("gauge").innerHTML = s;
 }
 
-// The dot glides toward the latest reading instead of jumping (drawn every animation frame).
-let targetCents = null, shownCents = 0;
+// The needle moves like a real meter: a spring pulls it to the reading, with a little overshoot
+// that settles in a few frames. At rest (nothing heard) it returns to the centre, dimmed.
+let targetCents = null, pos = 0, vel = 0;
 function drawMeter() {
-  if (targetCents == null) return;
-  shownCents += (targetCents - shownCents) * 0.28;
-  const c = Math.max(-50, Math.min(50, shownCents));
-  $("gband").setAttribute("d", Math.abs(c) < 0.6 ? "" : c < 0 ? arc(c, 0) : arc(0, c));
-  const [x, y] = pt(c);
-  for (const id of ["gdot", "ghalo"]) { $(id).setAttribute("cx", f1(x)); $(id).setAttribute("cy", f1(y)); }
+  const goal = targetCents == null ? 0 : Math.max(-52, Math.min(52, targetCents));
+  vel = vel * 0.7 + (goal - pos) * 0.12;
+  pos += vel;
+  const deg = (Math.max(-52, Math.min(52, pos)) / 50) * SWEEP;
+  $("needle").setAttribute("transform", `rotate(${deg.toFixed(2)} ${CX} ${CY})`);
+}
+// Keep the needle animating while the mic is off (e.g. returning to centre).
+function idleAnimate() {
+  if (raf) return;
+  const step = () => {
+    drawMeter();
+    raf = Math.abs(pos) > 0.05 || Math.abs(vel) > 0.05 ? requestAnimationFrame(step) : 0;
+  };
+  raf = requestAnimationFrame(step);
 }
 
 function renderTunings() {
@@ -112,32 +134,36 @@ function show(freq) {
     stage.className = "stage state-idle";
     targetCents = null;
     $("note").textContent = "–";
+    $("nprev").textContent = $("nnext").textContent = "";
     $("status").textContent = tuning.notes.length ? "Play a string" : "Play a note";
-    $("readout").textContent = "";
+    $("cents").textContent = "";
     if (current !== null && locked === null) { current = null; renderStrings(); }
     return;
   }
-  let name, octave, cents;
+  let name, octave, cents, midi;
   if (!tuning.notes.length) {
-    ({ name, octave, cents } = nearestNote(freq, a4));
+    ({ name, octave, cents, midi } = nearestNote(freq, a4));
   } else {
     const i = locked ?? closestString(freq, tuning.notes, a4);
     if (i !== current) { current = i; inTuneSince = 0; renderStrings(); }
     const n = tuning.notes[i];
     ({ name, octave } = display(n));
-    cents = centsOff(freq, midiToFreq(parseNote(n), a4));
+    midi = parseNote(n);
+    cents = centsOff(freq, midiToFreq(midi, a4));
   }
+  // The notes either side: where the needle is heading if you go too far.
+  $("nprev").textContent = display(noteText(midi - 1)).name;
+  $("nnext").textContent = display(noteText(midi + 1)).name;
   const abs = Math.abs(cents);
   const state = abs <= IN_TUNE ? "in" : abs <= NEAR ? "near" : "far";
-  if (targetCents == null) shownCents = cents; // first reading: start where the note is
   targetCents = cents;
-  stage.className = `stage state-${state}`;
+  stage.className = `stage state-${state} ${cents < 0 ? "flat" : "sharp"}`;
   $("note").innerHTML = `${name}<sub>${octave}</sub>`;
   // Too low means the string is too loose: tighten (tune up).
   $("status").innerHTML = state === "in" ? `${ICON.check} In tune`
     : cents < 0 ? `${ICON.up} Tune up` : `${ICON.down} Tune down`;
   const rc = Math.round(cents) || 0; // no "-0"
-  $("readout").textContent = `${freq.toFixed(1)} Hz · ${rc > 0 ? "+" : ""}${rc} cents`;
+  $("cents").innerHTML = `${rc > 0 ? "+" : rc < 0 ? "−" : ""}${Math.abs(rc)}¢<small>${freq.toFixed(1)} Hz</small>`;
 
   if (state === "in" && current !== null) {
     if (!inTuneSince) inTuneSince = performance.now();
@@ -172,18 +198,30 @@ function tickLoop() {
 
 // ---------- Microphone ----------
 
+// Messages about the microphone appear under the meter (no full-screen start page, D47).
+function micMessage(html, retry = true) {
+  const m = $("micmsg");
+  m.innerHTML = html + (retry ? `<button id="retry">Try again</button>` : "");
+  m.hidden = false;
+}
+
+let starting = false;
 async function start() {
-  const msg = $("startmsg");
+  if (stream || starting) return;
+  starting = true;
+  try { await openMic(); } finally { starting = false; }
+}
+
+async function openMic() {
   if (!navigator.mediaDevices?.getUserMedia) {
-    msg.innerHTML = `<span class="err">The microphone needs a secure page. Open Cortex through its Tailscale (https) address.</span>`;
+    micMessage(`<span class="err">The microphone needs a secure page. Open Cortex through its Tailscale (https) address.</span>`, false);
     return;
   }
   let state = "unknown";
   try { state = (await navigator.permissions.query({ name: "microphone" })).state; } catch {}
-  msg.textContent = `Asking for the microphone… (site setting: ${state})`;
   const slow = setTimeout(() => {
-    msg.innerHTML = `<span class="err">Still waiting for an answer about the microphone, but no question appeared. (site setting: ${state})</span>`;
-  }, 4000);
+    micMessage(`<span>Waiting for microphone permission… (site setting: ${state})</span>`, false);
+  }, 2500);
   try {
     // Phone voice processing would treat a guitar note as noise and squash it: turn it all off.
     stream = await navigator.mediaDevices.getUserMedia({
@@ -193,19 +231,26 @@ async function start() {
     clearTimeout(slow);
     // Which layer said no: Chrome's per-site setting ("denied") or something below it ("prompt"/"granted").
     const why = `${err.message}; site setting: ${state}`; // DOMException.message is read-only
-    msg.innerHTML = `<span class="err">${err.name === "NotAllowedError"
-      ? "Microphone access is blocked. Installed web apps get it through Chrome: open Chrome → ⋮ → Settings → Site settings → Microphone, find the Cortex address and set it to Allow. Also check Android Settings → Apps → Chrome → Permissions → Microphone is allowed. Then reopen Cortex. (Chrome says: " + why + ")"
-      : "Couldn't open the microphone: " + why}</span>`;
+    micMessage(`<span class="err">${err.name === "NotAllowedError"
+      ? "The tuner can't use the microphone: access is blocked. Chrome only asks websites when its own Android microphone permission allows it."
+      : "Couldn't open the microphone."}</span><span>(${why})</span>`);
     return;
   }
   clearTimeout(slow);
+  $("micmsg").hidden = true;
   ctx = ctx && ctx.state !== "closed" ? ctx : new AudioContext();
-  if (ctx.state === "suspended") await ctx.resume();
   analyser = ctx.createAnalyser();
   analyser.fftSize = 4096; // ~85 ms of sound: enough cycles of the low E (82 Hz)
   buf = new Float32Array(analyser.fftSize);
   ctx.createMediaStreamSource(stream).connect(analyser);
-  $("start").hidden = true;
+  // Browsers may keep audio paused until the first tap on the page; then one tap anywhere starts it.
+  if (ctx.state === "suspended") {
+    ctx.resume().catch(() => {});
+    if (ctx.state === "suspended") {
+      micMessage(`<span>Tap anywhere to start listening</span>`, false);
+      addEventListener("pointerdown", () => { ctx.resume(); $("micmsg").hidden = true; }, { once: true });
+    }
+  }
   try { wake = await navigator.wakeLock?.request("screen"); } catch {}
   cancelAnimationFrame(raf);
   tickLoop();
@@ -213,12 +258,14 @@ async function start() {
 
 function stop() {
   cancelAnimationFrame(raf);
+  raf = 0;
   stream?.getTracks().forEach((t) => t.stop());
   stream = null;
   wake?.release().catch(() => {});
   wake = null;
   recent = [];
   show(null);
+  idleAnimate();
 }
 
 // Release the mic when the app is in the background; pick it up again on return.
@@ -250,7 +297,7 @@ function playTone(freq) {
 
 // ---------- Events ----------
 
-$("go").addEventListener("click", start);
+$("micmsg").addEventListener("click", (ev) => { if (ev.target.id === "retry") start(); });
 // ---------- Sheets: tuning list and custom tuning editor ----------
 // Each open sheet is a history entry, so the phone's back gesture closes it.
 
@@ -424,5 +471,7 @@ for (const [id, step] of [["a4down", -1], ["a4up", 1]]) {
 drawGauge(); renderTunings(); renderStrings(); renderA4();
 cortex.onChange(loadCustom);
 loadCustom().then(() => cortex.startAutoSync());
+drawMeter();
+start(); // straight into listening: the browser asks for the mic the first time
 
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+keepUpdated(() => !draftDirty()); // don't reload away a half-made custom tuning

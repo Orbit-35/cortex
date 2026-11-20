@@ -254,9 +254,14 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Why:** the owner wants all of Cortex in their portfolio's pink, and changing the look later should be a one-file edit. One dialog means every app confirms the same way.
 - **Trade-off:** one more request per page (cached by the service worker, so only on updates).
 
-### D46. Tuner meter: arc with a gliding dot
+### D46. Tuner meter: arc with a gliding dot (Superseded by D47)
 - **Decision:** the needle gauge became a thick arc (−50 to +50 cents) with a dot that glides to the reading every animation frame and a coloured band from the centre to the dot. Colour shows closeness: pink when far, amber within 12 cents, green with a glow within 3. The note sits large inside the arc; "Tune up / Tune down / In tune" is a coloured pill below. The meter fills the screen width (up to 480 px).
 - **Why:** the owner found the needle plain and small. The band and colour read at a glance from arm's length while tuning.
+
+### D47. Tuner meter: analogue needle; listening starts on open
+- **Decision:** the meter is a needle gauge again, but richer: ticks every cent (longer every 5, numbered every 10), coloured zones under the scale (green ±3, amber ±12, pink beyond), a tapered needle with a glow and pivot cap. The needle is driven by a spring (pulls to the reading with a slight overshoot) every animation frame, and rests dimmed at the centre when nothing is heard. Under the meter: the note with its neighbouring semitones either side, a large cents value with Hz, and flat/sharp lights around a "Tune up / Tune down / In tune" pill. The full-screen "Start tuner" page is gone: the mic opens when the tuner opens; problems (blocked, unsupported, waiting for permission, audio paused until a tap) show inline under the meter with "Try again".
+- **Why:** the owner preferred a needle, and found the arc-and-dot version too simple and its movement unpleasant. A spring reads as a physical meter; the extra cues (lights, neighbours, cents) answer "which way and how far" without reading numbers. The start page was an extra tap every time.
+- **Also:** the tuner and home pages now reload into a new version as soon as it's installed (`keepUpdated()` in `core/ui.js`, same rule as lifting's D36), except while a custom tuning is half-edited.
 
 ## Security and hosting
 

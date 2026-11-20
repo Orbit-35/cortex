@@ -66,37 +66,55 @@
   .btn1 { background: var(--accent); border: 0; color: var(--on-accent); }
   .btndel { background: none; border: 0; color: var(--danger); min-height: 48px; width: 100%; margin-top: 8px; font-weight: 600; border-radius: 14px; }
 
-  /* The meter: a thick arc from -50 to +50 cents. A dot rides the arc and a coloured band grows from the
-     centre to it. Colour follows how close you are: pink (far), amber (close), green (in tune). */
-  .stage { --st: var(--accent); flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 8px 0; }
+  /* The meter (D47): an analogue-style needle over a fine scale with green/amber/pink zones.
+     --st is the state colour: pink (far), amber (close), green (in tune). */
+  .stage { --st: var(--accent); flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 4px 0 8px; }
   .stage.state-near { --st: var(--warn); }
   .stage.state-in { --st: var(--good); }
-  .meter { position: relative; width: 100%; max-width: 480px; }
+  .stage.state-idle { --st: var(--muted); }
+  .meter { width: 100%; max-width: 500px; background: radial-gradient(120% 90% at 50% 100%, var(--card) 0%, var(--bg) 70%);
+    border: 1px solid var(--line); border-radius: 24px; padding: 10px 6px 0; }
   .gauge { display: block; width: 100%; overflow: visible; }
-  .gauge .track { fill: none; stroke: var(--card2); stroke-width: 20; stroke-linecap: round; }
-  .gauge .zone { fill: none; stroke: var(--good); stroke-width: 20; opacity: .28; }
-  .gauge .band { fill: none; stroke: var(--st); stroke-width: 20; stroke-linecap: round; opacity: .85; }
-  .gauge .halo { fill: var(--st); opacity: 0; transition: opacity .25s; }
-  .state-in .gauge .halo { opacity: .55; }
-  .gauge .dot { fill: var(--st); stroke: var(--bg); stroke-width: 5; }
-  .gauge .tick { stroke: var(--line); stroke-width: 2; stroke-linecap: round; }
-  .gauge .tick.major { stroke: var(--muted); }
-  .gauge .tick.zero { stroke: var(--good); stroke-width: 3; }
-  .gauge .sym { fill: var(--muted); font-size: 24px; text-anchor: middle; font-weight: 600; }
-  .state-idle .gauge .dot, .state-idle .gauge .band, .state-idle .gauge .halo { display: none; }
+  .gauge .tk { stroke: var(--muted); stroke-linecap: round; opacity: .45; }
+  .gauge .tk.m5 { opacity: .7; }
+  .gauge .tk.m10 { stroke: var(--text); opacity: .85; stroke-width: 2.5; }
+  .gauge .tk.m0 { stroke: var(--good); opacity: 1; stroke-width: 3.5; }
+  .gauge .num { fill: var(--muted); font-size: 13px; text-anchor: middle; font-variant-numeric: tabular-nums; }
+  .gauge .num.zero { fill: var(--good); font-weight: 700; }
+  .gauge .zone { fill: none; stroke-width: 7; }
+  .gauge .z-far { stroke: var(--accent); opacity: .35; }
+  .gauge .z-near { stroke: var(--warn); opacity: .55; }
+  .gauge .z-in { stroke: var(--good); opacity: .9; }
+  .gauge .sym { fill: var(--muted); font-size: 22px; text-anchor: middle; font-weight: 600; }
+  .gauge .needle { fill: var(--st); transition: fill .2s; }
+  .gauge .glow { fill: var(--st); opacity: 0; transition: opacity .25s, fill .2s; }
+  .state-in .gauge .glow { opacity: .35; }
+  .state-idle .gauge .needle { opacity: .35; }
+  .gauge .cap { fill: var(--card2); stroke: var(--st); stroke-width: 3; transition: stroke .2s; }
+  .gauge .capdot { fill: var(--st); transition: fill .2s; }
 
-  .center { position: absolute; left: 0; right: 0; top: 36%; display: flex; flex-direction: column; align-items: center; pointer-events: none; }
-  .note { font-size: clamp(84px, 27vw, 120px); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; transition: color .2s; }
+  .notes { display: flex; align-items: center; justify-content: center; gap: 22px; margin-top: 4px; }
+  .nb { font-size: 22px; font-weight: 700; color: var(--muted); opacity: .55; min-width: 40px; text-align: center; }
+  .note { font-size: clamp(76px, 24vw, 108px); font-weight: 800; line-height: 1; display: flex; align-items: baseline; transition: color .2s; }
   .note sub { font-size: .3em; font-weight: 600; color: var(--muted); margin-left: 3px; vertical-align: baseline; }
   .state-idle .note { color: var(--line); }
   .state-in .note { color: var(--good); }
-  .readout { font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; min-height: 22px; margin-top: 6px; }
-  .status { font-size: 20px; font-weight: 700; min-height: 44px; padding: 0 18px; border-radius: 999px; display: flex; align-items: center; gap: 8px;
-    color: var(--muted); transition: background .2s, color .2s; }
-  .state-far .status { color: var(--accent); background: var(--accent-soft); }
-  .state-near .status { color: var(--warn); background: rgb(245 165 36 / .14); }
-  .state-in .status { color: var(--on-accent); background: var(--good); }
-  .status svg { width: 22px; height: 22px; }
+  .cents { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--st); min-height: 38px; line-height: 38px; transition: color .2s; }
+  .cents small { font-size: 15px; color: var(--muted); font-weight: 500; margin-left: 8px; }
+  .lights { display: flex; align-items: center; gap: 12px; }
+  .led { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--card); border: 1px solid var(--line);
+    color: var(--line); transition: background .15s, color .15s, box-shadow .15s; }
+  .led svg { width: 22px; height: 22px; }
+  .state-far.flat .led.l, .state-near.flat .led.l, .state-far.sharp .led.r, .state-near.sharp .led.r {
+    color: var(--on-accent); background: var(--st); border-color: transparent; box-shadow: 0 0 18px var(--st); }
+  .status { min-width: 150px; font-size: 18px; font-weight: 700; min-height: 44px; padding: 0 16px; border-radius: 999px; display: flex; align-items: center;
+    justify-content: center; gap: 6px; color: var(--muted); background: var(--card); border: 1px solid var(--line); transition: background .2s, color .2s; }
+  .state-far .status, .state-near .status { color: var(--st); }
+  .state-in .status { color: var(--on-accent); background: var(--good); border-color: transparent; box-shadow: 0 0 20px rgb(76 195 138 / .45); }
+  .status svg { width: 20px; height: 20px; }
+  .micmsg { font-size: 14px; color: var(--muted); text-align: center; max-width: 340px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .micmsg .err { color: var(--danger); }
+  .micmsg button { min-height: 44px; padding: 0 20px; border: 0; border-radius: 12px; background: var(--accent); color: var(--on-accent); font-weight: 700; }
 
   .strings { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 8px; }
   .str { position: relative; aspect-ratio: 1; border-radius: 50%; border: 2px solid var(--line); background: var(--card); font-size: 18px; font-weight: 700; display: grid; place-items: center; padding: 0; }
@@ -112,10 +130,6 @@
   .ref { margin-left: auto; display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 0 14px; min-height: 46px; font-size: 15px; font-weight: 600; }
   .ref:disabled { opacity: .4; }
 
-  .start { position: fixed; inset: 0; background: rgb(17 20 24 / .92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; z-index: 10; }
-  .start p { color: var(--muted); max-width: 320px; margin: 0; }
-  .start .go { min-height: 56px; padding: 0 28px; border: 0; border-radius: 16px; background: var(--accent); color: var(--on-accent); font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
-  .start .err { color: var(--danger); }
 </style>
 </head>
 <body>
@@ -130,11 +144,15 @@
   </div>
 
   <div class="stage state-idle" id="stage">
-    <div class="meter">
-      <svg class="gauge" viewBox="0 0 400 236" aria-hidden="true" id="gauge"></svg>
-      <div class="center"><div class="note" id="note" aria-live="polite">–</div><div class="readout" id="readout"></div></div>
+    <div class="meter"><svg class="gauge" viewBox="0 0 400 226" aria-hidden="true" id="gauge"></svg></div>
+    <div class="notes"><span class="nb" id="nprev"></span><div class="note" id="note" aria-live="polite">–</div><span class="nb" id="nnext"></span></div>
+    <div class="cents" id="cents"></div>
+    <div class="lights">
+      <span class="led l" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></span>
+      <div class="status" id="status">Play a string</div>
+      <span class="led r" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
     </div>
-    <div class="status" id="status">Play a string</div>
+    <div class="micmsg" id="micmsg" hidden></div>
   </div>
 
   <div class="strings" id="strings"></div>
@@ -155,12 +173,6 @@
 
 <div class="sheet" id="picker" hidden role="dialog" aria-modal="true" aria-label="Choose tuning"><div class="panel" id="pickerpanel"></div></div>
 <div class="sheet" id="editor" hidden role="dialog" aria-modal="true" aria-label="Custom tuning"><div class="panel" id="editorpanel"></div></div>
-
-<div class="start" id="start">
-  <svg class="i" viewBox="0 0 24 24" style="width:56px;height:56px;color:var(--accent)"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
-  <p id="startmsg">The tuner listens through your microphone. Nothing is recorded or sent anywhere.</p>
-  <button class="go" id="go">Start tuner</button>
-</div>
 
 <script type="module" src="/guitar/app.js"></script>
 </body>
