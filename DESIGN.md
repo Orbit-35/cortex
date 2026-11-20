@@ -224,6 +224,11 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Decision:** tapping exercises in the picker toggles a numbered selection; a bottom bar adds them all (in tap order), or adds them as a superset. Creating an exercise opens the full form (name, main and helper muscles, cue) and selects it on save.
 - **Why:** adding one exercise per trip through the picker was slow and gave no feedback; creating exercises without muscles left them out of the muscle charts.
 
+### D41. In-app confirm dialog for anything that loses data
+- **Decision:** destructive or final actions ask first in a styled bottom dialog (`ask()` in `app.js`) instead of the browser's `confirm()`. It covers deleting a set that has values, removing an exercise from a workout (always), cancelling or deleting a workout, finishing a workout, leaving an edit with unsaved changes, merging and hiding exercises. The dangerous button is red and on the right; the safe one is labelled with what it keeps ("Keep going", not "Cancel", when the action itself is called Cancel). Tapping outside or the back gesture means no.
+- **Why:** the owner wanted more confirmation. The browser's `confirm()` shows the site address, looks like a system error, and is easy to tap through mid-set.
+- **Trade-off:** one extra tap on Finish and on removals. Empty sets still delete without asking, since nothing is lost.
+
 ## Security and hosting
 
 ### D16. No auth yet; tailnet only

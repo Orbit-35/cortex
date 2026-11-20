@@ -54,6 +54,27 @@ function fmtClock(ms) {
   return h ? `${h}:${p(m)}:${p(sec)}` : `${m}:${p(sec)}`;
 }
 
+// In-app confirm (DESIGN D41): replaces the browser's confirm(), which shows the site address
+// and is easy to tap through. Resolves true only on the red/blue button.
+let askDone = null;
+function ask(title, body = "", ok = "Delete", danger = true, no = "Cancel") {
+  askDone?.(false);
+  const el = $("ask");
+  el.innerHTML = `<div class="ask-box" role="alertdialog" aria-modal="true" aria-labelledby="ask-t">
+    <div class="ask-t" id="ask-t">${esc(title)}</div>${body ? `<p>${esc(body)}</p>` : ""}
+    <div class="ask-btns"><button class="secondary" data-a="0">${esc(no)}</button>
+      <button class="primary${danger ? " danger-fill" : ""}" data-a="1">${esc(ok)}</button></div></div>`;
+  el.hidden = false;
+  el.querySelector('[data-a="0"]').focus();
+  return new Promise((res) => { askDone = (v) => { el.hidden = true; askDone = null; res(v); }; });
+}
+$("ask").addEventListener("click", (ev) => {
+  if (!askDone) return;
+  const b = ev.target.closest("[data-a]");
+  if (b) askDone(b.dataset.a === "1");
+  else if (ev.target.id === "ask") askDone(false); // tap outside = cancel
+});
+
 let toastTimer;
 function toast(text) {
   $("toast").textContent = text;
@@ -216,12 +237,15 @@ function openOverlay(ui) {
 
 addEventListener("popstate", (ev) => {
   const ui = ev.state?.ui;
+  if (askDone) askDone(false); // back gesture cancels an open question
   while (stack.length && stack.at(-1) !== ui) $(OVERLAYS[stack.pop()]).hidden = true;
   if (!editor && !ui) document.body.style.overflow = "";
   if (editor && !ui) {
     // A live workout is safe in storage; an edit with unsaved changes asks first.
-    if (editor.dirty && editor.draft.mode !== "live" && !confirm("Discard your changes?")) {
+    if (editor.dirty && editor.draft.mode !== "live") {
       history.pushState({ ui: "editor" }, "", location.hash);
+      ask("Discard your changes?", "Your edits to this workout won't be saved.", "Discard")
+        .then((yes) => { if (yes) { editor.dirty = false; history.back(); } });
       return;
     }
     closeEditor();
@@ -373,7 +397,7 @@ function renderEditor() {
   html += `<div class="addex"><button class="secondary" data-act="addex">+ Add exercises</button></div>
     <p class="muted small" style="text-align:center">Swipe a set left to delete it · tap a set's number for type, effort and order</p>
     <div style="margin-top:20px;text-align:center">
-      ${live ? `<button class="ghost danger" data-act="discard">Discard workout</button>` : ""}
+      ${live ? `<button class="ghost danger" data-act="discard">Cancel workout</button>` : ""}
       ${d.mode === "edit" ? `<button class="ghost danger" data-act="delete">Delete workout</button>` : ""}
     </div>
     </div></div>`;
@@ -434,7 +458,16 @@ $("editor").addEventListener("click", async (ev) => {
     case "rpe": ex.sets[si].rpe = b.dataset.v === "" ? null : Number(b.dataset.v); break;
     case "setup": swap(ex.sets, si, si - 1); editor.setMenu = `${xi}:${si - 1}`; break;
     case "setdown": swap(ex.sets, si, si + 1); editor.setMenu = `${xi}:${si + 1}`; break;
-    case "delset": ex.sets.splice(si, 1); editor.setMenu = null; swipedRow = null; break;
+    case "delset": {
+      const r = ex.sets[si];
+      if ((r.weight || r.reps || r.done) &&
+          !(await ask(`Delete set ${si + 1} of ${exName(ex.key)}?`, [r.weight && `${r.weight} ${d.unit}`, r.reps && `${r.reps} reps`].filter(Boolean).join(" × ")))) {
+        closeSwipe();
+        return;
+      }
+      ex.sets.splice(si, 1); editor.setMenu = null; swipedRow = null;
+      break;
+    }
     case "useprev": {
       const p = previousSets(workouts, ex.key, d.start, d.id)[si];
       if (!p) return;
@@ -470,16 +503,19 @@ $("editor").addEventListener("click", async (ev) => {
       break;
     }
     case "exremove":
-      if (ex.sets.some((r) => r.weight || r.reps) && !confirm(`Remove ${exName(ex.key)} and its sets?`)) return;
+      {
+        const n = ex.sets.filter((r) => r.weight || r.reps || r.done).length;
+        if (!(await ask(`Remove ${exName(ex.key)}?`, n ? `Its ${n} set${n > 1 ? "s" : ""} in this workout will be deleted too.` : "", "Remove"))) return;
+      }
       d.exercises.splice(xi, 1);
       resetMenus();
       break;
     case "discard":
-      if (!confirm("Discard this workout? Nothing from it will be saved.")) return;
+      if (!(await ask("Cancel this workout?", "Nothing from it will be saved. This can't be undone.", "Cancel workout", true, "Keep going"))) return;
       clearLive(); editor.dirty = false; history.back();
       return;
     case "delete":
-      if (!confirm("Delete this workout and all its sets?")) return;
+      if (!(await ask("Delete this workout?", "All of its sets are deleted too. This can't be undone.", "Delete workout"))) return;
       await cortex.putEntries(deletePlan(editor.original));
       editor.dirty = false; history.back(); toast("Workout deleted");
       return;
@@ -568,10 +604,10 @@ async function saveEditor() {
   if (d.mode === "live") {
     const unticked = d.exercises.reduce((n, x) => n + x.sets.filter((r) => !r.done && (r.weight || r.reps)).length, 0);
     if (!total) {
-      if (confirm("No sets are ticked off yet. Discard this workout?")) { clearLive(); editor.dirty = false; history.back(); }
+      if (await ask("No sets ticked off yet", "Finishing now saves nothing. Cancel this workout instead?", "Cancel workout", true, "Keep going")) { clearLive(); editor.dirty = false; history.back(); }
       return;
     }
-    if (unticked && !confirm(`${unticked} set${unticked > 1 ? "s aren't" : " isn't"} ticked off and won't be saved. Finish anyway?`)) return;
+    if (!(await ask("Finish workout?", unticked ? `${unticked} set${unticked > 1 ? "s aren't" : " isn't"} ticked off and won't be saved.` : `${total} set${total > 1 ? "s" : ""} will be saved.`, "Finish", false))) return;
   } else if (!total) {
     toast("Add at least one set with reps");
     return;
@@ -1087,7 +1123,10 @@ $("exedit").addEventListener("click", async (ev) => {
   if (d.eq) exEdit.equipment = exEdit.equipment === d.eq ? null : d.eq;
   else if (d.primary) { exEdit.primary = exEdit.primary === d.primary ? null : d.primary; exEdit.secondary.delete(d.primary); }
   else if (d.secondary) { exEdit.secondary.has(d.secondary) ? exEdit.secondary.delete(d.secondary) : exEdit.secondary.add(d.secondary); }
-  else if (d.act === "hideex") exEdit.hidden = !exEdit.hidden;
+  else if (d.act === "hideex") {
+    if (!exEdit.hidden && !(await ask(`Hide ${exEdit.name || "this exercise"}?`, "It disappears from the lists. Its history is kept and you can unhide it later.", "Hide"))) return;
+    exEdit.hidden = !exEdit.hidden;
+  }
   else if (d.act === "saveex") {
     if (!(await saveExercise())) return;
     const { key, pick } = exEdit;
@@ -1100,7 +1139,7 @@ $("exedit").addEventListener("click", async (ev) => {
 });
 
 async function mergeExercise(from, to) {
-  if (!confirm(`Merge “${exName(from)}” into “${exName(to)}”? All its sets become ${exName(to)} sets, and “${exName(from)}” gets hidden.`)) return;
+  if (!(await ask(`Merge into ${exName(to)}?`, `All sets of “${exName(from)}” become ${exName(to)} sets, and “${exName(from)}” gets hidden.`, "Merge", false))) return;
   const x = exerciseFor(lib, from);
   await cortex.putEntries([
     ...mergePlan(entries, from, to),
