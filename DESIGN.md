@@ -100,6 +100,8 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Trade-off:** native shells load pages from the device, not from the server, so the server will need CORS and auth before they can sync. Not built yet.
 
 ### D14. Service worker: stale-while-revalidate, never touches `/api`
+**Superseded by D36** (the strategy changed; "never touches `/api`" still holds).
+
 - **Decision:** `static/sw.js` precaches the app shell and serves cached files immediately while fetching a fresh copy for next time. API, docs and non-GET requests bypass it.
 - **Why:** the app opens instantly and offline. Keeping data out of the HTTP cache means there is exactly one offline data store (IndexedDB) and one sync path.
 - **Trade-off:** after a page changes, the first reload shows the old version and the second shows the new one. New shell files must be added to the `SHELL` list. Service workers need HTTPS or localhost.
@@ -197,6 +199,30 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Decision:** edits write an `_exercise` override (D23). Hiding sets `hidden` (history stays, lists skip it). Merging moves every set of A to B (renumbering where a workout had both), rewrites workouts' exercise lists, and hides A with `merged_into`.
 - **Why:** history is the point of the app, so nothing that has sets can vanish. Merge fixes duplicates without retyping.
 - **Trade-off:** a merge rewrites many entries at once (one sync batch). A workout open in the editor during a merge keeps the old key until reopened.
+
+### D36. App updates: one fingerprinted version at a time, auto-reload
+- **Decision:** the server serves `/sw.js` stamped with a hash of every file under `static/` (`app_version()`), and `/api/version` returns the same hash. The service worker serves the app cache-first from a cache named after that version. A new version downloads the full set of files, replaces the old cache in one step, and the page reloads itself (a live workout reopens; an unsaved edit of a saved workout delays the reload). The phone checks for updates whenever the app comes to the foreground. Settings shows "Up to date ✓" or "Updating…".
+- **Why:** stale-while-revalidate (D14) refreshed each file separately and only on the next launch, so the phone ran a week-old version at the gym and could even mix files from two versions. A hash computed by the server means no version number to remember to bump.
+- **Trade-off:** each update re-downloads every app file (small: well under 1 MB). The reload is a visible flash when an update lands.
+
+### D37. Set types: warm-up, drop set, failure
+- **Decision:** a set can carry `data.type` = `warmup` | `drop` | `failure` (null = normal). Warm-ups are shown as "W", not numbered, and **excluded** from volume, set counts, PRs, muscle charts and exercise charts (`isWorking()`). Drop and failure sets count normally and are labelled D / F.
+- **Why:** warm-ups would otherwise inflate volume and muscle sets, and could never be PRs anyway. This is the convention in Strong/Hevy.
+- **Trade-off:** history and "Previous" still show warm-ups so you can repeat them.
+
+### D38. Supersets are a `group` on the workout's exercise list
+- **Decision:** exercises in a workout can share `data.exercises[i].group`; consecutive exercises with the same group are shown as one superset (coloured bar). Created from the picker ("Add as superset") or the exercise menu ("Superset with next").
+- **Why:** a superset is about how exercises were done together in one workout, not a property of the exercises or sets, so it belongs on the workout's list. No change to sets.
+- **Trade-off:** groups only display when members are adjacent; moving one member away splits the visual group. Nothing (e.g. a rest timer) uses grouping yet.
+
+### D39. Exercise cues live on the exercise, notes live on the workout
+- **Decision:** a cue ("elbows tucked") is stored on the exercise definition (`_exercise` override, `cue`) and shown pinned every time the exercise appears. A note is stored on that workout only.
+- **Why:** cues are reminders for every session; notes are about one session. Keeping them apart means a cue is written once.
+- **Trade-off:** editing a cue writes the exercise override immediately (outside the workout save).
+
+### D40. Picker selects several exercises before adding
+- **Decision:** tapping exercises in the picker toggles a numbered selection; a bottom bar adds them all (in tap order), or adds them as a superset. Creating an exercise opens the full form (name, main and helper muscles, cue) and selects it on save.
+- **Why:** adding one exercise per trip through the picker was slow and gave no feedback; creating exercises without muscles left them out of the muscle charts.
 
 ## Security and hosting
 

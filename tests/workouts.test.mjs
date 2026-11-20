@@ -111,3 +111,24 @@ import { mergePlan } from "../static/lifting/workouts.js";
   assert.equal(mergePlan(db, "bench", "bench").length, 0);
   console.log("mergePlan: ok");
 }
+
+// ---- set types, supersets, cues ----
+import { isWorking } from "../static/lifting/workouts.js";
+{
+  const d = newDraft({ id: "g1", mode: "past", unit: "lb", start: at(4, 12), name: "W" });
+  d.exercises.push({ key: "bench_press", notes: "", group: "ss1", sets: [{ ...blankRow("a"), weight: "95", reps: "10", type: "warmup" }, { ...blankRow("b"), weight: "185", reps: "5" }] });
+  d.exercises.push({ key: "barbell_row", notes: "", group: "ss1", sets: [{ ...blankRow("c"), weight: "135", reps: "8" }] });
+  const out = commitPlan(d, null);
+  assert.deepEqual(out[0].data.exercises.map((x) => x.group), ["ss1", "ss1"]);
+  const a = out.find((e) => e.client_id === "a");
+  assert.equal(a.data.type, "warmup");
+  assert.equal(isWorking(a), false);
+  const w = groupWorkouts(out)[0];
+  assert.equal(w.exercises[0].group, "ss1");
+  assert.equal(volumeKg(w.exercises[0].sets), volumeKg([out.find((e) => e.client_id === "b")])); // warm-up excluded
+  const back = draftFromWorkout(w, "lb");
+  assert.equal(back.exercises[0].sets[0].type, "warmup");
+  assert.equal(back.exercises[1].group, "ss1");
+  assert.equal(resolveExercises([{ data: { key: "bench_press", cue: "Elbows tucked" } }]).get("bench_press").cue, "Elbows tucked");
+  console.log("set types, supersets, cues: ok");
+}

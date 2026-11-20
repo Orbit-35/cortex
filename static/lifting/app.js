@@ -6,7 +6,7 @@ import { e1rm, dayKey, personalRecords, prKind, sessionSeries } from "/lifting/s
 import { convert, showWeight, parseWeight, fmtNum } from "/lifting/units.js";
 import { MUSCLES, resolveExercises, exerciseFor, exerciseId, newKey } from "/lifting/library.js";
 import {
-  EXERCISE, isSet, groupWorkouts, legacyPlan, defaultName, previousSets, volumeKg,
+  EXERCISE, isSet, isWorking, groupWorkouts, legacyPlan, defaultName, previousSets, volumeKg,
   newDraft, blankRow, draftFromWorkout, keptRows, commitPlan, deletePlan, mergePlan,
 } from "/lifting/workouts.js";
 import { GROUPS, GROUP_LABEL, groupSets, prEvents, totals, milestone, since } from "/lifting/progress.js";
@@ -24,7 +24,8 @@ const TABS = { log: "Log", progress: "Progress", exercises: "Exercises", body: "
 
 // ---------- State ----------
 let entries = [];        // every lifting entry on this device
-let sets = [];           // just the sets
+let sets = [];           // just the sets (including warm-ups, for history)
+let workSets = [];       // sets that count: no warm-ups (stats, PRs, charts)
 let workouts = [];       // grouped, newest first
 let lib = new Map();     // exercise key -> definition
 let unit = "lb";         // display unit (setting)
@@ -32,7 +33,7 @@ let tab = "log";
 let historyShown = 40;
 let prs = new Map();     // set id -> "e1rm" | "reps" for every set that was a PR
 let chartMetric = "e1rm"; // which line the exercise charts show: e1rm | heaviest | volume
-let editor = null;       // { draft, original, dirty, menus:Set, notes:Set }
+let editor = null;       // { draft, original, dirty, menu, notes:Set, setMenu, cueEdit }
 
 // ---------- Small helpers ----------
 const todayKey = () => dayKey(new Date().toISOString());
@@ -127,7 +128,7 @@ function renderLog() {
     for (const w of workouts.slice(0, historyShown)) {
       const m = fmtDate(w.start, { month: "long", year: "numeric" });
       if (m !== month) { html += `<h2>${esc(m)}</h2>`; month = m; }
-      const all = w.exercises.flatMap((x) => x.sets);
+      const all = w.exercises.flatMap((x) => x.sets).filter(isWorking);
       const nPr = all.filter((s) => prs.has(s.client_id)).length;
       const meta = [fmtDuration(w.duration_min), all.length ? `${Math.round(convert(volumeKg(all), "kg", unit)).toLocaleString()} ${unit}` : "", `${all.length} sets`, nPr ? `🏆 ${nPr} PR${nPr > 1 ? "s" : ""}` : ""]
         .filter(Boolean).join(" · ");
@@ -135,8 +136,10 @@ function renderLog() {
         <div class="head"><span class="name">${esc(w.name)}</span><span class="muted small">${esc(fmtDate(w.start))}</span></div>
         <div class="muted small">${esc(meta)}</div>
         <div class="lines">${w.exercises.filter((x) => x.sets.length).map((x) => {
-          const b = bestSet(x.sets);
-          return `<div class="line"><span>${x.sets.length} × ${esc(exName(x.key))}</span><span>${b ? esc(setText(b)) : ""}</span></div>`;
+          const work = x.sets.filter(isWorking);
+          const b = bestSet(work);
+          const count = work.length ? `${work.length} ×` : `${x.sets.length} warm-up${x.sets.length > 1 ? "s" : ""} ·`;
+          return `<div class="line"><span>${count} ${esc(exName(x.key))}</span><span>${b ? esc(setText(b)) : ""}</span></div>`;
         }).join("")}</div>
         ${w.notes ? `<div class="notes">${esc(w.notes)}</div>` : ""}
       </button>`;
@@ -180,7 +183,7 @@ function editWorkout(id) {
 // The editor is its own browser-history step, so the phone's back button closes it.
 function openEditor(draft, original) {
   if (!draft) return;
-  editor = { draft, original, dirty: false, menus: new Set(), notes: new Set(), setMenu: null };
+  editor = { draft, original, dirty: false, menu: null, notes: new Set(), setMenu: null, cueEdit: null };
   history.pushState({ ui: "editor" }, "", location.hash);
   $("editor").hidden = false;
   $("editor").scrollTop = 0;
@@ -227,6 +230,8 @@ addEventListener("popstate", (ev) => {
 
 // ---------- Editor ----------
 
+const SET_TYPES = { warmup: ["W", "Warm-up"], drop: ["D", "Drop set"], failure: ["F", "Failure"] };
+
 function changed() {
   editor.dirty = true;
   if (editor.draft.mode === "live") saveLive(editor.draft);
@@ -244,6 +249,33 @@ function hintFor(xi, si) {
   return { weight: "", reps: "" };
 }
 
+// Set labels: warm-ups show "W" (and aren't numbered), drop sets "D", failure "F";
+// normal sets are numbered 1, 2, 3… skipping warm-ups.
+function setLabels(rows) {
+  let n = 0;
+  return rows.map((r) => {
+    if (r.type === "warmup") return "W";
+    n++;
+    return r.type ? SET_TYPES[r.type][0] : String(n);
+  });
+}
+
+// Supersets: consecutive exercises sharing a `group`. Colour cycles per superset.
+function supersetInfo(exercises) {
+  const info = exercises.map(() => ({ first: false, last: false, color: null }));
+  let colorIdx = 0;
+  for (let i = 0; i < exercises.length; i++) {
+    const g = exercises[i].group;
+    if (!g) continue;
+    const prevSame = i > 0 && exercises[i - 1].group === g;
+    const nextSame = i < exercises.length - 1 && exercises[i + 1].group === g;
+    if (!prevSame && !nextSame) continue; // a lone member isn't a superset
+    if (!prevSame) colorIdx++;
+    info[i] = { first: !prevSame, last: !nextSame, color: `var(--ss-${colorIdx % 3})` };
+  }
+  return info;
+}
+
 function renderEditor() {
   const { draft: d } = editor;
   const live = d.mode === "live";
@@ -253,6 +285,7 @@ function renderEditor() {
     : d.mode === "past" ? "Add past workout" : "Edit workout";
   const h = d.duration_min != null ? Math.floor(d.duration_min / 60) : "";
   const m = d.duration_min != null ? d.duration_min % 60 : "";
+  const ss = supersetInfo(d.exercises);
 
   let html = `<div class="wrap">
     <div class="sheet-top">
@@ -274,17 +307,32 @@ function renderEditor() {
       <textarea data-f="notes" rows="2" placeholder="Workout notes" style="margin-top:10px">${esc(d.notes)}</textarea>`;
 
   d.exercises.forEach((ex, xi) => {
+    const def = exerciseFor(lib, ex.key);
     const prev = previousSets(workouts, ex.key, d.start, d.id);
     const showNotes = ex.notes || editor.notes.has(xi);
-    html += `<section class="ex" data-x="${xi}">
+    const labels = setLabels(ex.sets);
+    const s = ss[xi];
+    const menuOpen = editor.menu === xi;
+    html += `<section class="ex${s.color ? " ss" : ""}${s.color && !s.last ? " ss-mid" : ""}" data-x="${xi}" ${s.color ? `style="--ss:${s.color}"` : ""}>
+      ${s.first ? `<div class="sslabel">Superset</div>` : ""}
       <div class="ex-head">
-        <button class="exname" data-act="exinfo">${esc(exName(ex.key))}</button>
-        <button class="ghost" data-act="exmenu" aria-label="Exercise options">•••</button>
+        <button class="exname" data-act="exinfo">${esc(def.name)}</button>
+        <button class="ghost dots${menuOpen ? " on" : ""}" data-act="exmenu" aria-label="Options for ${esc(def.name)}" aria-expanded="${menuOpen}">•••</button>
       </div>
-      ${editor.menus.has(xi) ? `<div class="ex-menu">
-        <button class="secondary" data-act="exnote">Add note</button>
-        <button class="secondary danger" data-act="exremove">Remove</button></div>` : ""}
-      ${showNotes ? `<textarea data-f="exnotes" rows="1" placeholder="Notes for ${esc(exName(ex.key))}">${esc(ex.notes)}</textarea>` : ""}
+      ${menuOpen ? `<div class="menu-grid">
+        <button class="secondary" data-act="exnote">📝 Note for today</button>
+        <button class="secondary" data-act="excue">📌 ${def.cue ? "Edit" : "Add"} cue</button>
+        <button class="secondary" data-act="exup" ${xi === 0 ? "disabled" : ""}>↑ Move up</button>
+        <button class="secondary" data-act="exdown" ${xi === d.exercises.length - 1 ? "disabled" : ""}>↓ Move down</button>
+        ${ex.group && s.color ? `<button class="secondary" data-act="exunss">Leave superset</button>`
+          : `<button class="secondary" data-act="exss" ${xi === d.exercises.length - 1 ? "disabled" : ""}>⛓ Superset with next</button>`}
+        <button class="secondary danger" data-act="exremove">✕ Remove</button>
+      </div>` : ""}
+      ${editor.cueEdit === xi
+        ? `<div class="cue-edit"><textarea data-f="cue" rows="2" placeholder="Cues that work for you, shown every time you do ${esc(def.name)}">${esc(def.cue)}</textarea>
+            <div class="ex-menu"><button class="secondary" data-act="cuecancel">Cancel</button><button class="primary sm" data-act="cuesave">Save cue</button></div></div>`
+        : def.cue ? `<button class="cue" data-act="excue">📌 ${esc(def.cue)}</button>` : ""}
+      ${showNotes ? `<textarea data-f="exnotes" rows="1" placeholder="Notes for today's ${esc(def.name)}">${esc(ex.notes)}</textarea>` : ""}
       <div class="grid ${live ? "live" : "edit"}">
         <div class="ghead">Set</div><div class="ghead l">Previous</div><div class="ghead">${esc(d.unit)}</div><div class="ghead">Reps</div>${live ? `<div class="ghead">✓</div>` : ""}
       </div>`;
@@ -293,19 +341,28 @@ function renderEditor() {
       // empty row isn't saved, so a greyed-out number would look saved when it isn't.
       const hint = live ? hintFor(xi, si) : { weight: "", reps: "" };
       const p = prev[si];
-      html += `<div class="grid setrow ${live ? "live" : "edit"}${r.done && live ? " done" : ""}" data-s="${si}">
-        <button class="setno" data-act="setmenu" aria-label="Set ${si + 1} options">${r.pr ? "🏆" : si + 1}${r.rpe != null ? `<small>@${r.rpe}</small>` : ""}</button>
-        <button class="prev" data-act="useprev" ${p ? "" : "disabled"}>${p ? esc(setText(p)) : "—"}</button>
-        <input data-f="weight" inputmode="decimal" value="${esc(r.weight)}" placeholder="${esc(hint.weight)}" aria-label="Weight">
-        <input data-f="reps" inputmode="numeric" value="${esc(r.reps)}" placeholder="${esc(hint.reps)}" aria-label="Reps">
-        ${live ? `<button class="tick" data-act="tick" aria-pressed="${r.done}" aria-label="Set done">✓</button>` : ""}
+      const label = labels[si];
+      html += `<div class="swipe" data-s="${si}">
+        <button class="trash" data-act="delset" aria-label="Delete set" tabindex="-1">🗑</button>
+        <div class="grid setrow ${live ? "live" : "edit"}${r.done && live ? " done" : ""}">
+          <button class="setno t-${r.type || "normal"}" data-act="setmenu" aria-label="Set ${label} options">${r.pr ? "🏆" : label}${r.rpe != null ? `<small>@${r.rpe}</small>` : ""}</button>
+          <button class="prev" data-act="useprev" ${p ? "" : "disabled"}>${p ? esc(setText(p)) : "—"}</button>
+          <input data-f="weight" inputmode="decimal" value="${esc(r.weight)}" placeholder="${esc(hint.weight)}" aria-label="Weight">
+          <input data-f="reps" inputmode="numeric" value="${esc(r.reps)}" placeholder="${esc(hint.reps)}" aria-label="Reps">
+          ${live ? `<button class="tick" data-act="tick" aria-pressed="${r.done}" aria-label="Set done">✓</button>` : ""}
+        </div>
       </div>`;
       if (editor.setMenu === `${xi}:${si}`) {
         html += `<div class="setmenu" data-s="${si}">
-          <div class="small"><b>Effort (RPE)</b> <span class="muted">· ${r.rpe != null ? `${r.rpe}: ${RPE_TEXT[r.rpe]}` : "how many more reps could you have done?"}</span></div>
-          <div class="chips wrapchips">${RPES.map((v) => `<button class="chip${r.rpe === v ? " on" : ""}" data-act="rpe" data-v="${v}">${v}</button>`).join("")}</div>
+          <div class="small"><b>Set type</b></div>
+          <div class="chips wrapchips">${[[null, "Normal"], ...Object.entries(SET_TYPES).map(([k, v]) => [k, v[1]])].map(([k, label]) =>
+            `<button class="chip${(r.type || null) === k ? " on" : ""}" data-act="settype" data-v="${k || ""}">${label}</button>`).join("")}</div>
+          <div class="small" style="margin-top:8px"><b>Effort (RPE)</b> <span class="muted">· ${r.rpe != null ? `${r.rpe}: ${RPE_TEXT[r.rpe]}` : "how many more reps could you have done?"}</span></div>
+          <div class="chips wrapchips">${RPES.map((v) => `<button class="chip${r.rpe === v ? " on" : ""}" data-act="rpe" data-v="${v}">${v}</button>`).join("")}
+            ${r.rpe != null ? `<button class="chip" data-act="rpe" data-v="">Clear</button>` : ""}</div>
           <div class="ex-menu">
-            ${r.rpe != null ? `<button class="secondary" data-act="rpe" data-v="">Clear RPE</button>` : ""}
+            <button class="secondary" data-act="setup" ${si === 0 ? "disabled" : ""}>↑</button>
+            <button class="secondary" data-act="setdown" ${si === ex.sets.length - 1 ? "disabled" : ""}>↓</button>
             <button class="secondary danger" data-act="delset">Delete set</button>
           </div></div>`;
       }
@@ -313,8 +370,9 @@ function renderEditor() {
     html += `<button class="addset" data-act="addset">+ Add set</button></section>`;
   });
 
-  html += `<div class="addex"><button class="secondary" data-act="addex">+ Add exercise</button></div>
-    <div style="margin-top:28px;text-align:center">
+  html += `<div class="addex"><button class="secondary" data-act="addex">+ Add exercises</button></div>
+    <p class="muted small" style="text-align:center">Swipe a set left to delete it · tap a set's number for type, effort and order</p>
+    <div style="margin-top:20px;text-align:center">
       ${live ? `<button class="ghost danger" data-act="discard">Discard workout</button>` : ""}
       ${d.mode === "edit" ? `<button class="ghost danger" data-act="delete">Delete workout</button>` : ""}
     </div>
@@ -332,6 +390,7 @@ $("editor").addEventListener("input", (ev) => {
   if (f === "name") d.name = el.value;
   else if (f === "notes") d.notes = el.value;
   else if (f === "exnotes") d.exercises[xi].notes = el.value;
+  else if (f === "cue") return; // saved with the "Save cue" button
   else if (f === "date") {
     if (!el.value) return;
     const old = new Date(d.start);
@@ -347,14 +406,19 @@ $("editor").addEventListener("input", (ev) => {
   changed();
 });
 
+const swap = (arr, i, j) => { [arr[i], arr[j]] = [arr[j], arr[i]]; };
+
 $("editor").addEventListener("click", async (ev) => {
+  if (swipeJustMoved) { swipeJustMoved = false; return; }
   const b = ev.target.closest("[data-act]");
-  if (!b || !editor) return;
+  if (!b || !editor) { closeSwipe(); return; }
   const d = editor.draft;
   const xi = Number(b.closest("[data-x]")?.dataset.x);
   const si = Number(b.closest("[data-s]")?.dataset.s);
   const ex = d.exercises[xi];
-  switch (b.dataset.act) {
+  const act = b.dataset.act;
+  if (act !== "delset") closeSwipe();
+  switch (act) {
     case "close": history.back(); return;
     case "save": await saveEditor(); return;
     case "addex": openPicker(); return;
@@ -366,13 +430,11 @@ $("editor").addEventListener("click", async (ev) => {
       renderEditor();
       return;
     }
-    case "rpe":
-      ex.sets[si].rpe = b.dataset.v === "" ? null : Number(b.dataset.v);
-      break;
-    case "delset":
-      ex.sets.splice(si, 1);
-      editor.setMenu = null;
-      break;
+    case "settype": ex.sets[si].type = b.dataset.v || null; if (b.dataset.v === "warmup") ex.sets[si].pr = null; break;
+    case "rpe": ex.sets[si].rpe = b.dataset.v === "" ? null : Number(b.dataset.v); break;
+    case "setup": swap(ex.sets, si, si - 1); editor.setMenu = `${xi}:${si - 1}`; break;
+    case "setdown": swap(ex.sets, si, si + 1); editor.setMenu = `${xi}:${si + 1}`; break;
+    case "delset": ex.sets.splice(si, 1); editor.setMenu = null; swipedRow = null; break;
     case "useprev": {
       const p = previousSets(workouts, ex.key, d.start, d.id)[si];
       if (!p) return;
@@ -380,12 +442,37 @@ $("editor").addEventListener("click", async (ev) => {
       break;
     }
     case "tick": tick(xi, si); break;
-    case "exmenu": editor.menus.has(xi) ? editor.menus.delete(xi) : editor.menus.add(xi); renderEditor(); return;
-    case "exnote": editor.notes.add(xi); editor.menus.delete(xi); renderEditor(); return;
+    case "exmenu": editor.menu = editor.menu === xi ? null : xi; renderEditor(); return;
+    case "exnote": editor.notes.add(xi); editor.menu = null; renderEditor(); return;
+    case "excue": editor.cueEdit = xi; editor.menu = null; renderEditor(); return;
+    case "cuecancel": editor.cueEdit = null; renderEditor(); return;
+    case "cuesave": {
+      const text = b.closest(".cue-edit").querySelector("textarea").value.trim();
+      editor.cueEdit = null;
+      await saveExerciseDef(ex.key, { cue: text });
+      renderEditor();
+      toast(text ? "Cue saved: it'll show every time you do this exercise" : "Cue removed");
+      return;
+    }
+    case "exup": swap(d.exercises, xi, xi - 1); editor.menu = null; resetMenus(); break;
+    case "exdown": swap(d.exercises, xi, xi + 1); editor.menu = null; resetMenus(); break;
+    case "exss": {
+      const next = d.exercises[xi + 1];
+      const g = ex.group || next.group || cortex.newId().slice(0, 8);
+      ex.group = g; next.group = g; editor.menu = null;
+      break;
+    }
+    case "exunss": {
+      const g = ex.group;
+      ex.group = null; editor.menu = null;
+      const left = d.exercises.filter((x) => x.group === g);
+      if (left.length === 1) left[0].group = null;
+      break;
+    }
     case "exremove":
       if (ex.sets.some((r) => r.weight || r.reps) && !confirm(`Remove ${exName(ex.key)} and its sets?`)) return;
       d.exercises.splice(xi, 1);
-      editor.menus.clear(); editor.notes.clear(); editor.setMenu = null;
+      resetMenus();
       break;
     case "discard":
       if (!confirm("Discard this workout? Nothing from it will be saved.")) return;
@@ -402,6 +489,56 @@ $("editor").addEventListener("click", async (ev) => {
   renderEditor();
 });
 
+function resetMenus() {
+  editor.menu = null; editor.notes.clear(); editor.setMenu = null; editor.cueEdit = null;
+}
+
+// ---- Swipe a set row left to reveal its delete button ----
+let swipe = null;          // gesture in progress
+let swipedRow = null;      // the row currently swiped open
+let swipeJustMoved = false;
+const SWIPE_W = 76;
+
+function closeSwipe() {
+  if (swipedRow) { swipedRow.style.transform = ""; swipedRow.closest(".swipe")?.classList.remove("open"); swipedRow = null; }
+}
+$("editor").addEventListener("pointerdown", (ev) => {
+  const row = ev.target.closest(".setrow");
+  if (!row || ev.target.closest(".trash")) return;
+  if (swipedRow && swipedRow !== row) closeSwipe();
+  swipe = { row, x: ev.clientX, y: ev.clientY, base: row === swipedRow ? -SWIPE_W : 0, dx: 0, horizontal: null };
+});
+$("editor").addEventListener("pointermove", (ev) => {
+  if (!swipe) return;
+  const dx = ev.clientX - swipe.x, dy = ev.clientY - swipe.y;
+  if (swipe.horizontal === null && Math.hypot(dx, dy) > 8) swipe.horizontal = Math.abs(dx) > Math.abs(dy);
+  if (!swipe.horizontal) return;
+  swipe.dx = dx;
+  const x = Math.min(0, Math.max(-SWIPE_W - 20, swipe.base + dx));
+  swipe.row.style.transition = "none";
+  swipe.row.style.transform = `translateX(${x}px)`;
+});
+const endSwipe = () => {
+  if (!swipe) return;
+  const { row, base, dx, horizontal } = swipe;
+  swipe = null;
+  row.style.transition = "";
+  if (!horizontal) return;
+  swipeJustMoved = Math.abs(dx) > 8;
+  setTimeout(() => (swipeJustMoved = false), 300);
+  if (base + dx < -SWIPE_W / 2) {
+    row.style.transform = `translateX(${-SWIPE_W}px)`;
+    row.closest(".swipe").classList.add("open");
+    swipedRow = row;
+  } else {
+    row.style.transform = "";
+    row.closest(".swipe").classList.remove("open");
+    if (swipedRow === row) swipedRow = null;
+  }
+};
+$("editor").addEventListener("pointerup", endSwipe);
+$("editor").addEventListener("pointercancel", endSwipe);
+
 // Tick a set done. Empty boxes take the greyed-out hint, so repeating last time is one tap.
 function tick(xi, si) {
   const d = editor.draft, ex = d.exercises[xi], r = ex.sets[si];
@@ -411,11 +548,12 @@ function tick(xi, si) {
   const w = parseWeight(weight), n = Number(reps);
   if (Number.isNaN(w) || !Number.isInteger(n) || n < 1) { toast("Enter the weight and reps first"); return; }
   Object.assign(r, { weight, reps, done: true, at: new Date().toISOString() });
+  if (r.type === "warmup") { r.pr = null; if (navigator.vibrate) navigator.vibrate(25); return; }
 
-  // PR check against every earlier set of this exercise, including earlier ones today.
+  // PR check against every earlier working set of this exercise, including earlier ones today.
   const earlier = [
-    ...sets.filter((s) => s.metric === ex.key && s.recorded_at < r.at),
-    ...ex.sets.filter((o) => o !== r && o.done).map((o) => ({ value: parseWeight(o.weight), unit: d.unit, data: { reps: Number(o.reps) }, recorded_at: o.at })),
+    ...workSets.filter((s) => s.metric === ex.key && s.recorded_at < r.at),
+    ...ex.sets.filter((o) => o !== r && o.done && o.type !== "warmup").map((o) => ({ value: parseWeight(o.weight), unit: d.unit, data: { reps: Number(o.reps) }, recorded_at: o.at })),
   ];
   const kind = prKind({ value: w, unit: d.unit, data: { reps: n }, recorded_at: r.at }, earlier);
   r.pr = kind;
@@ -451,19 +589,22 @@ async function saveEditor() {
 }
 
 // ---------- Exercise picker ----------
-// Used to add an exercise to a workout ({ kind: "add" }) or to choose a merge target
-// ({ kind: "merge", from }).
+// Add exercises to a workout ({ kind: "add" }): tap to select several (they highlight),
+// then "Add". Or choose a merge target ({ kind: "merge", from }): one tap picks.
 
 let pickerMode = { kind: "add" };
+let pickerSel = [];
 function openPicker(mode = { kind: "add" }) {
   pickerMode = mode;
+  pickerSel = [];
   openOverlay("picker").innerHTML = `<div class="wrap">
     <div class="sheet-top">
       <button class="back" data-act="pkclose" aria-label="Back">‹</button>
-      <input class="pk-search" id="pksearch" placeholder="${mode.kind === "merge" ? `Merge ${esc(exName(mode.from))} into…` : "Search or create"}" autocomplete="off" enterkeyhint="search">
-      <span></span>
+      <input class="pk-search" id="pksearch" placeholder="${mode.kind === "merge" ? `Merge ${esc(exName(mode.from))} into…` : "Search"}" autocomplete="off" enterkeyhint="search">
+      <button class="ghost" data-act="pknew">${mode.kind === "merge" ? "" : "+ New"}</button>
     </div>
-    <div id="pklist" class="sheet-body" style="padding-top:4px"></div></div>`;
+    <div id="pklist" class="sheet-body" style="padding-top:4px"></div>
+    <div class="pkbar" id="pkbar" hidden></div></div>`;
   renderPicker();
   $("pksearch").addEventListener("input", renderPicker);
 }
@@ -475,45 +616,62 @@ function renderPicker() {
   const blocked = merge ? new Set([pickerMode.from]) : new Set(editor?.draft.exercises.map((x) => x.key));
   const all = allExercises().filter((x) => !x.hidden);
   const match = (x) => !ql || x.name.toLowerCase().includes(ql);
-  const item = (x) => `<button class="pkitem" data-key="${esc(x.key)}" ${blocked.has(x.key) ? "disabled" : ""}>
-      <span>${esc(x.name)}</span><small>${esc(MUSCLES[x.primary] || "")}</small></button>`;
+  const item = (x) => {
+    const i = pickerSel.indexOf(x.key);
+    return `<button class="pkitem${i >= 0 ? " sel" : ""}" data-key="${esc(x.key)}" ${blocked.has(x.key) ? "disabled" : ""} aria-pressed="${i >= 0}">
+      <span>${esc(x.name)}<br><small>${esc([MUSCLES[x.primary], x.equipment].filter(Boolean).join(" · ") || "no muscle set")}</small></span>
+      <span class="pkcheck">${i >= 0 ? i + 1 : ""}</span></button>`;
+  };
 
   let html = "";
   if (!merge && q && !all.some((x) => x.name.toLowerCase() === ql)) {
-    html += `<button class="pkitem create" data-create="${esc(q)}">+ Create “${esc(q)}”</button>`;
+    html += `<button class="pkitem create" data-act="pknew">+ Create “${esc(q)}”…</button>`;
   }
   const recent = [...new Set(workouts.flatMap((w) => w.exercises.map((x) => x.key)))].slice(0, 8)
-    .map((k) => exerciseFor(lib, k)).filter(match);
+    .map((k) => exerciseFor(lib, k)).filter((x) => !x.hidden && match(x));
   if (recent.length && !q) html += `<h2>Recent</h2>` + recent.map(item).join("");
   const rest = all.filter(match).sort((a, b) => a.name.localeCompare(b.name));
   html += `<h2>${q ? "Results" : "All exercises"}</h2>` + (rest.map(item).join("") || `<p class="empty">No match.</p>`);
   $("pklist").innerHTML = html;
+
+  const n = pickerSel.length;
+  $("pkbar").hidden = merge || !n;
+  $("pkbar").innerHTML = n ? `${n > 1 ? `<button class="secondary" data-act="pkss">Add as superset</button>` : ""}
+    <button class="primary" data-act="pkadd">Add ${n} exercise${n > 1 ? "s" : ""}</button>` : "";
+}
+
+function addSelected(asSuperset) {
+  const d = editor.draft;
+  const group = asSuperset && pickerSel.length > 1 ? cortex.newId().slice(0, 8) : null;
+  for (const key of pickerSel) {
+    const n = Math.max(1, previousSets(workouts, key, d.start, d.id).length);
+    d.exercises.push({ key, notes: "", group, sets: Array.from({ length: n }, () => blankRow(cortex.newId())) });
+  }
+  pickerSel = [];
+  changed();
+  history.back(); // closes the picker
+  renderEditor();
+  requestAnimationFrame(() => $("editor").scrollTo({ top: $("editor").scrollHeight }));
 }
 
 $("picker").addEventListener("click", async (ev) => {
   const b = ev.target.closest("button");
   if (!b) return;
-  if (b.dataset.act === "pkclose") { history.back(); return; }
+  const act = b.dataset.act;
+  if (act === "pkclose") { history.back(); return; }
   if (pickerMode.kind === "merge") {
     if (b.dataset.key) await mergeExercise(pickerMode.from, b.dataset.key);
     return;
   }
+  if (act === "pknew") { openExerciseEdit(null, { name: $("pksearch").value.trim(), pick: true }); return; }
   if (!editor) return;
-  let key = b.dataset.key;
-  if (b.dataset.create) {
-    const name = b.dataset.create.trim().slice(0, 60);
-    key = newKey(name, new Set(allExercises().map((x) => x.key)));
-    await cortex.putEntries([{ client_id: exerciseId(key), module: "lifting", metric: EXERCISE, data: { key, name, primary: null, secondary: [] } }]);
-    lib.set(key, { key, name, equipment: null, primary: null, secondary: [], custom: true, hidden: false });
-  }
+  if (act === "pkadd") { addSelected(false); return; }
+  if (act === "pkss") { addSelected(true); return; }
+  const key = b.dataset.key;
   if (!key) return;
-  const d = editor.draft;
-  const n = Math.max(1, previousSets(workouts, key, d.start, d.id).length);
-  d.exercises.push({ key, notes: "", sets: Array.from({ length: n }, () => blankRow(cortex.newId())) });
-  changed();
-  history.back(); // closes the picker
-  renderEditor();
-  requestAnimationFrame(() => $("editor").scrollTo({ top: $("editor").scrollHeight }));
+  const i = pickerSel.indexOf(key);
+  if (i >= 0) pickerSel.splice(i, 1); else pickerSel.push(key);
+  renderPicker();
 });
 
 // ---------- Progress tab: overview ----------
@@ -531,13 +689,13 @@ function renderProgress() {
   const ms = milestone(t.volumeKg);
   const days = RANGES[range][1];
   const fromIso = days ? new Date(Date.now() - days * 864e5).toISOString() : null;
-  const groups = groupSets(since(sets, fromIso), (k) => exerciseFor(lib, k));
+  const groups = groupSets(since(workSets, fromIso), (k) => exerciseFor(lib, k));
 
   // Most-trained exercises, with their best estimated 1RM.
   const sessionsByKey = new Map();
   for (const w of workouts) for (const x of w.exercises) if (x.sets.length) sessionsByKey.set(x.key, (sessionsByKey.get(x.key) || 0) + 1);
   const top = [...sessionsByKey.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([key, n]) => {
-    const { best } = personalRecords(sets.filter((s) => s.metric === key));
+    const { best } = personalRecords(workSets.filter((s) => s.metric === key));
     return { key, n, best };
   });
 
@@ -650,8 +808,9 @@ const METRICS = {
 // Everything about one exercise: a per-session chart (est. 1RM, heaviest or volume),
 // records, and every session it was done in.
 function renderExerciseInto(el, key) {
-  const mine = sets.filter((s) => s.metric === key);
-  if (!mine.length) { el.innerHTML = `<p class="empty">No sets of ${esc(exName(key))} yet.</p>`; return; }
+  const mine = workSets.filter((s) => s.metric === key);
+  const cue = exerciseFor(lib, key).cue;
+  if (!mine.length) { el.innerHTML = `${cue ? `<div class="cue static">📌 ${esc(cue)}</div>` : ""}<p class="empty">No sets of ${esc(exName(key))} yet.</p>`; return; }
   const series = sessionSeries(mine);
   const { best, reps } = personalRecords(mine);
   const top = series.reduce((a, d) => (d[chartMetric] > a[chartMetric] ? d : a), series[0]);
@@ -659,7 +818,7 @@ function renderExerciseInto(el, key) {
   const gain = series.length > 1 ? top[chartMetric] - first[chartMetric] : 0;
   const sessions = workouts.filter((w) => w.exercises.some((x) => x.key === key && x.sets.length));
 
-  el.innerHTML = `
+  el.innerHTML = `${cue ? `<div class="cue static">📌 ${esc(cue)}</div>` : ""}
     <div class="chips" role="group" aria-label="Chart">${Object.entries(METRICS).map(([k, m]) =>
       `<button class="chip${k === chartMetric ? " on" : ""}" data-metric="${k}">${m.label}</button>`).join("")}</div>
     <div class="hero">
@@ -687,7 +846,11 @@ function renderExerciseInto(el, key) {
       return `<div class="card hist">
         <div class="head"><b>${esc(w.name)}</b><span class="muted small">${esc(fmtDate(w.start))}</span></div>
         ${x.notes ? `<div class="notes">${esc(x.notes)}</div>` : ""}
-        ${x.sets.map((st, i) => `<div class="line"><span class="muted">${prs.has(st.client_id) ? "🏆" : i + 1}</span><span>${esc(setText(st))}</span></div>`).join("")}
+        ${(() => { let n = 0; return x.sets.map((st) => {
+          const t = st.data?.type;
+          const label = t === "warmup" ? "W" : (n++, prs.has(st.client_id) ? "🏆" : t ? SET_TYPES[t][0] : n);
+          return `<div class="line${t === "warmup" ? " muted" : ""}"><span class="muted">${label}</span><span>${esc(setText(st))}</span></div>`;
+        }).join(""); })()}
       </div>`;
     }).join("")}`;
 
@@ -848,12 +1011,13 @@ $("view-exercises").addEventListener("click", (ev) => {
 });
 
 // Edit form. `key` null = new exercise.
-let exEdit = null; // { key, name, equipment, primary, secondary:Set, hidden }
-function openExerciseEdit(key) {
+let exEdit = null; // { key, name, equipment, primary, secondary:Set, hidden, cue, pick }
+// opts.name prefills a new exercise's name; opts.pick selects it in the picker after saving.
+function openExerciseEdit(key, opts = {}) {
   const x = key ? exerciseFor(lib, key) : null;
   exEdit = {
-    key, name: x?.name || exQuery.trim(), equipment: x?.equipment || null, primary: x?.primary || null,
-    secondary: new Set(x?.secondary || []), hidden: !!x?.hidden, builtin: !!x && !x.custom,
+    key, name: x?.name || opts.name || exQuery.trim(), equipment: x?.equipment || null, primary: x?.primary || null,
+    secondary: new Set(x?.secondary || []), hidden: !!x?.hidden, cue: x?.cue || "", pick: !!opts.pick,
   };
   openOverlay("exedit");
   renderExerciseEdit();
@@ -871,12 +1035,15 @@ function renderExerciseEdit() {
     </div>
     <div class="sheet-body">
       <label class="lbl">Name<input id="exname" value="${esc(e.name)}" autocomplete="off"></label>
+      ${!e.key ? `<p class="muted small">Pick the main muscle so it counts in your muscle charts.</p>` : ""}
       <div class="lbl">Equipment</div>
       <div class="chips wrapchips">${EQUIPMENT.map((q) => `<button class="chip${e.equipment === q ? " on" : ""}" data-eq="${q}">${q[0].toUpperCase() + q.slice(1)}</button>`).join("")}</div>
       <div class="lbl">Main muscle <span class="muted">· counts 1 set</span></div>
       <div class="chips wrapchips">${muscleChips("primary", (k) => e.primary === k)}</div>
       <div class="lbl">Helper muscles <span class="muted">· count ½ set each</span></div>
       <div class="chips wrapchips">${muscleChips("secondary", (k) => e.secondary.has(k))}</div>
+      <label class="lbl">📌 Cue <span class="muted">· shown every time you do this exercise</span>
+        <textarea id="excue" rows="2" placeholder="e.g. elbows tucked, pause at the bottom">${esc(e.cue)}</textarea></label>
       ${e.key ? `<h2>More</h2>
         <div class="stack">
           <button class="secondary" data-act="mergeex">Merge into another exercise…</button>
@@ -886,23 +1053,35 @@ function renderExerciseEdit() {
     </div></div>`;
 }
 
-async function saveExercise(extra = {}) {
+async function saveExercise() {
   const e = exEdit;
   const name = ($("exname")?.value ?? e.name).trim().slice(0, 60);
   if (!name) { toast("Give it a name"); return false; }
+  if (!e.key && allExercises().some((x) => x.name.toLowerCase() === name.toLowerCase())) { toast(`“${name}” already exists`); return false; }
   const key = e.key || newKey(name, new Set(allExercises().map((x) => x.key)));
-  await cortex.putEntries([{
-    client_id: exerciseId(key), module: "lifting", metric: EXERCISE,
-    data: { key, name, equipment: e.equipment, primary: e.primary, secondary: [...e.secondary].filter((m) => m !== e.primary), hidden: e.hidden, ...extra },
-  }]);
+  await saveExerciseDef(key, {
+    name, equipment: e.equipment, primary: e.primary, hidden: e.hidden,
+    secondary: [...e.secondary].filter((m) => m !== e.primary), cue: ($("excue")?.value ?? e.cue).trim(),
+  });
   e.key = key;
   return true;
+}
+
+// Write an exercise's definition (DESIGN D23): current definition + changes, keeping any
+// other fields a previous override had. Updates the in-memory library right away.
+async function saveExerciseDef(key, changes) {
+  const x = exerciseFor(lib, key);
+  const prev = entries.find((en) => en.client_id === exerciseId(key) && !en.deleted_at)?.data || {};
+  const data = { ...prev, key, name: x.name, equipment: x.equipment, primary: x.primary, secondary: x.secondary, hidden: x.hidden, cue: x.cue, ...changes };
+  lib.set(key, { ...x, ...changes, custom: x.custom });
+  await cortex.putEntries([{ client_id: exerciseId(key), module: "lifting", metric: EXERCISE, data }]);
 }
 
 $("exedit").addEventListener("click", async (ev) => {
   const b = ev.target.closest("button");
   if (!b || !exEdit) return;
-  if (exEdit && $("exname")) exEdit.name = $("exname").value;
+  if ($("exname")) exEdit.name = $("exname").value;
+  if ($("excue")) exEdit.cue = $("excue").value;
   const d = b.dataset;
   if (d.act === "close") { history.back(); return; }
   if (d.eq) exEdit.equipment = exEdit.equipment === d.eq ? null : d.eq;
@@ -910,7 +1089,11 @@ $("exedit").addEventListener("click", async (ev) => {
   else if (d.secondary) { exEdit.secondary.has(d.secondary) ? exEdit.secondary.delete(d.secondary) : exEdit.secondary.add(d.secondary); }
   else if (d.act === "hideex") exEdit.hidden = !exEdit.hidden;
   else if (d.act === "saveex") {
-    if (await saveExercise()) { history.back(); toast("Exercise saved"); }
+    if (!(await saveExercise())) return;
+    const { key, pick } = exEdit;
+    history.back();
+    if (pick && !pickerSel.includes(key)) { pickerSel.push(key); renderPicker(); toast("Created and selected"); }
+    else toast("Exercise saved");
     return;
   } else if (d.act === "mergeex") { openPicker({ kind: "merge", from: exEdit.key }); return; }
   renderExerciseEdit();
@@ -948,8 +1131,23 @@ function renderSettings() {
             <button data-unit="lb" aria-pressed="${unit === "lb"}">lb</button>
             <button data-unit="kg" aria-pressed="${unit === "kg"}">kg</button>
           </span></li>
+        <li><span>App version<br><span class="muted small" id="vstate">Checking…</span></span><span class="muted small" id="vlocal"></span></li>
       </ul>
     </div></div>`;
+  showVersion();
+}
+
+// The version on this device (its cache name) vs the server's, so it's easy to tell
+// whether the phone has picked up the latest update.
+async function showVersion() {
+  let local = "";
+  try { local = ((await caches.keys()).find((k) => k.startsWith("cortex-shell-")) || "").replace("cortex-shell-", ""); } catch {}
+  if ($("vlocal")) $("vlocal").textContent = local || "—";
+  let server = null;
+  try { server = (await (await fetch("/api/version", { cache: "no-store" })).json()).version; } catch {}
+  const el = $("vstate");
+  if (!el) return;
+  el.textContent = !server ? "Can't reach the server to check" : server === local ? "Up to date ✓" : "Updating… reopen Cortex in a moment";
 }
 
 $("gear").addEventListener("click", () => { openOverlay("settings"); renderSettings(); });
@@ -986,9 +1184,10 @@ async function refresh() {
     return; // putEntries triggers another refresh
   }
   sets = entries.filter(isSet);
+  workSets = sets.filter(isWorking);
   workouts = groupWorkouts(entries);
   lib = resolveExercises(entries.filter((e) => e.metric === EXERCISE));
-  prs = prEvents(sets);
+  prs = prEvents(workSets);
   if (!editor) render();
   if (!$("picker").hidden) renderPicker();
   if (!$("exsheet").hidden && exsheetKey) {
@@ -1011,6 +1210,28 @@ showTab((location.hash || "#log").slice(1));
 refresh().then(() => cortex.startAutoSync());
 
 // The service worker keeps the app shell on the device so this page opens offline.
+// When a new version is installed (DESIGN D36) the page reloads itself into it, unless
+// you're mid-edit on a saved workout (then it waits). A live workout is safe in storage
+// and reopens after the reload.
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js").catch((err) => console.warn("No service worker:", err));
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("/sw.js").then((reg) => {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") reg.update().catch(() => {});
+    });
+  }).catch((err) => console.warn("No service worker:", err));
+  let reloading = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || reloading) return; // first install: this page is already current
+    if (editor?.dirty && editor.draft.mode !== "live") { toast("Update ready: it loads after you save"); return; }
+    reloading = true;
+    try { if (editor?.draft.mode === "live") sessionStorage.setItem("cortex.reopenLive", "1"); } catch {}
+    location.reload();
+  });
 }
+try {
+  if (sessionStorage.getItem("cortex.reopenLive")) {
+    sessionStorage.removeItem("cortex.reopenLive");
+    refresh().then(() => { const live = loadLive(); if (live) openEditor(live, null); });
+  }
+} catch {}

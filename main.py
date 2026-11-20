@@ -8,6 +8,7 @@ to push their outbox and pull what changed. See CLAUDE.md > Architecture.
 """
 
 import asyncio
+import hashlib
 import json
 import os
 import sqlite3
@@ -18,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
@@ -352,6 +353,29 @@ def list_metrics(module: str):
         return [r["metric"] for r in rows]
     finally:
         conn.close()
+
+
+def app_version() -> str:
+    """Fingerprint of every file under static/: changes whenever any app file changes."""
+    h = hashlib.sha256()
+    static = BASE_DIR / "static"
+    for f in sorted(static.rglob("*")):
+        if f.is_file() and f.name != "sw.js":
+            h.update(f.relative_to(static).as_posix().encode())
+            h.update(f.read_bytes())
+    return h.hexdigest()[:12]
+
+
+@app.get("/sw.js", include_in_schema=False)
+def service_worker():
+    """The service worker, stamped with the app version so phones notice every update."""
+    text = (BASE_DIR / "static" / "sw.js").read_text(encoding="utf-8").replace("__VERSION__", app_version())
+    return Response(text, media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/api/version")
+def version():
+    return {"version": app_version()}
 
 
 @app.get("/")

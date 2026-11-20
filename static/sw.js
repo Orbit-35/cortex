@@ -2,11 +2,14 @@
 // device so the app opens with no connection. It never touches /api: data goes
 // through IndexedDB + sync in /core/cortex.js instead.
 //
-// Strategy: "stale-while-revalidate". Serve the saved copy instantly, and fetch a
-// fresh copy in the background for next time. So after changing a page, the first
-// reload still shows the old version and the second shows the new one.
+// Strategy: "cache first, one version at a time". The server stamps VERSION with a
+// fingerprint of every app file, so any change produces a new service worker. The new
+// worker downloads the complete new set of files, then replaces the old set in one
+// step, so the app never mixes files from two versions. The page reloads itself when
+// that happens (see app.js). DESIGN D36.
 
-const CACHE = "cortex-shell-v4"; // bump to throw away every cached file
+const VERSION = "__VERSION__"; // replaced by the server (main.py /sw.js)
+const CACHE = `cortex-shell-${VERSION}`;
 const SHELL = [
   "/lifting/",
   "/lifting/app.js",
@@ -23,13 +26,18 @@ const SHELL = [
 const NETWORK_ONLY = ["/api/", "/docs", "/redoc", "/openapi.json"];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: "reload" skips the browser's HTTP cache, so we really get the new files.
+  event.waitUntil(
+    caches.open(CACHE)
+      .then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: "reload" }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("cortex-shell-") && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -41,23 +49,16 @@ self.addEventListener("fetch", (event) => {
   if (NETWORK_ONLY.some((p) => url.pathname.startsWith(p))) return;
 
   event.respondWith((async () => {
-    const cache = await caches.open(CACHE);
-    const cached = await cache.match(request, { ignoreSearch: true });
-    // "no-cache" = always check with the server rather than trusting the browser's HTTP cache.
-    const fresh = fetch(request.mode === "navigate" ? request : new Request(request, { cache: "no-cache" }))
-      .then((res) => {
-        if (res.ok && res.type === "basic") cache.put(request, res.clone());
-        return res;
-      });
-    if (cached) {
-      event.waitUntil(fresh.catch(() => {}));
-      return cached;
-    }
+    const cached = await caches.match(request, { ignoreSearch: true, cacheName: CACHE });
+    if (cached) return cached;
     try {
-      return await fresh;
+      return await fetch(request);
     } catch (err) {
       // Offline and not cached. The home URL redirects to lifting; mirror that.
-      if (request.mode === "navigate" && url.pathname === "/") return Response.redirect("/lifting/");
+      if (request.mode === "navigate") {
+        const shell = await caches.match("/lifting/", { cacheName: CACHE });
+        if (shell) return shell;
+      }
       throw err;
     }
   })());

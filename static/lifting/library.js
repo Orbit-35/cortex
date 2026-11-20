@@ -81,7 +81,7 @@ const RAW = [
 ];
 
 export const BUILTIN = RAW.map(([key, name, equipment, primary, ...secondary]) => ({
-  key, name, equipment, primary, secondary,
+  key, name, equipment, primary, secondary, cue: "",
 }));
 
 // "Bench Press" -> "bench_press". Leading/trailing "_" are stripped, so a typed name can
@@ -111,6 +111,7 @@ export function resolveExercises(exerciseEntries) {
       secondary: d.secondary ?? base?.secondary ?? [],
       custom: !base,
       hidden: !!d.hidden,
+      cue: d.cue ?? "",
     });
   }
   return map;
@@ -118,7 +119,7 @@ export function resolveExercises(exerciseEntries) {
 
 // Look up an exercise, falling back to a name made from the key.
 export function exerciseFor(map, key) {
-  return map.get(key) ?? { key, name: nameFromKey(key), equipment: null, primary: null, secondary: [], custom: true, hidden: false };
+  return map.get(key) ?? { key, name: nameFromKey(key), equipment: null, primary: null, secondary: [], custom: true, hidden: false, cue: "" };
 }
 
 // A key for a new exercise: its slug, made unique if taken ("cable_row_2").

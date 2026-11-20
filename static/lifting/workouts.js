@@ -5,7 +5,9 @@
 //            data { name, notes, duration_min, exercises: [{ key, notes }] }  (order of exercises)
 //   set      metric = exercise key, value = weight as typed, unit "lb"|"kg",
 //            data { reps, set (number within its exercise), workout (workout client_id),
-//                   rpe (perceived effort 6-10 in 0.5 steps, or null) }
+//                   rpe (perceived effort 6-10 in 0.5 steps, or null),
+//                   type ("warmup" | "drop" | "failure", or null for a normal set) }
+//            Workout exercises may carry `group` (supersets: same group = done together).
 //
 // Editing works on a "draft": a plain copy of a workout that the screen changes freely.
 // Saving turns the draft back into entries (commitPlan), so a whole workout is saved
@@ -17,6 +19,8 @@ import { toKg, showWeight, parseWeight } from "./units.js";
 export const WORKOUT = "_workout";
 export const EXERCISE = "_exercise";
 export const isSet = (e) => e.module === "lifting" && !e.metric.startsWith("_");
+// Warm-ups are kept and shown, but don't count toward volume, PRs or muscle sets.
+export const isWorking = (s) => s.data?.type !== "warmup";
 
 const byTime = (a, b) => (a.recorded_at < b.recorded_at ? -1 : a.recorded_at > b.recorded_at ? 1 : 0);
 const setNo = (s) => s.data?.set ?? 0;
@@ -36,11 +40,12 @@ export function groupWorkouts(entries) {
     const listed = (w.data?.exercises || []).map((x) => x.key);
     const order = [...new Set([...listed, ...mine.map((s) => s.metric)])];
     const notes = new Map((w.data?.exercises || []).map((x) => [x.key, x.notes || ""]));
+    const groups = new Map((w.data?.exercises || []).map((x) => [x.key, x.group || null]));
     workouts.push({
       id: w.client_id, entry: w,
       name: w.data?.name || "Workout", notes: w.data?.notes || "",
       start: w.recorded_at, duration_min: w.data?.duration_min ?? null,
-      exercises: order.map((key) => ({ key, notes: notes.get(key) || "", sets: mine.filter((s) => s.metric === key) })),
+      exercises: order.map((key) => ({ key, notes: notes.get(key) || "", group: groups.get(key) || null, sets: mine.filter((s) => s.metric === key) })),
     });
   }
   return workouts.sort((a, b) => (a.start < b.start ? 1 : a.start > b.start ? -1 : 0));
@@ -97,7 +102,7 @@ export function previousSets(workouts, key, beforeIso, excludeId) {
 }
 
 // Total volume of a list of sets, in kg: weight × reps.
-export const volumeKg = (sets) => sets.reduce((sum, s) => sum + toKg(s.value, s.unit) * (s.data?.reps || 0), 0);
+export const volumeKg = (sets) => sets.filter(isWorking).reduce((sum, s) => sum + toKg(s.value, s.unit) * (s.data?.reps || 0), 0);
 
 // ---------- Drafts ----------
 
@@ -107,7 +112,7 @@ export function newDraft({ id, mode, unit, start, name, duration_min = null }) {
   return { id, mode, unit, start, name, notes: "", duration_min, exercises: [] };
 }
 
-export const blankRow = (id) => ({ id, weight: "", reps: "", rpe: null, done: false, at: null });
+export const blankRow = (id) => ({ id, weight: "", reps: "", rpe: null, type: null, done: false, at: null });
 
 // A saved workout as an editable draft. `orig` remembers each set as saved, so
 // untouched sets are written back exactly as they were (including their unit).
@@ -116,10 +121,10 @@ export function draftFromWorkout(w, unit) {
     id: w.id, mode: "edit", unit, start: w.start, name: w.name, notes: w.notes,
     duration_min: w.duration_min,
     exercises: w.exercises.map((x) => ({
-      key: x.key, notes: x.notes,
+      key: x.key, notes: x.notes, group: x.group || null,
       sets: x.sets.map((s) => ({
         id: s.client_id, weight: showWeight(s.value, s.unit, unit), reps: String(s.data?.reps ?? ""),
-        rpe: s.data?.rpe ?? null, done: true, at: s.recorded_at,
+        rpe: s.data?.rpe ?? null, type: s.data?.type ?? null, done: true, at: s.recorded_at,
       })),
     })),
   };
@@ -148,7 +153,7 @@ export function commitPlan(draft, original, now = new Date()) {
   for (const ex of draft.exercises) {
     const rows = keptRows(draft, ex);
     if (!rows.length && draft.mode === "live") continue; // nothing done for this exercise
-    exercises.push({ key: ex.key, notes: ex.notes || "" });
+    exercises.push({ key: ex.key, notes: ex.notes || "", ...(ex.group ? { group: ex.group } : {}) });
     rows.forEach((r, i) => {
       const orig = origSets.get(r.id);
       const typed = parseWeight(r.weight);
@@ -161,7 +166,7 @@ export function commitPlan(draft, original, now = new Date()) {
         unit: untouched ? orig.unit : draft.unit,
         recorded_at: orig ? new Date(new Date(orig.recorded_at).getTime() + shift).toISOString()
           : draft.mode === "live" ? (r.at || nowIso) : draft.start,
-        data: { ...(orig?.data || {}), reps: validReps(r.reps), set: i + 1, workout: draft.id, rpe: r.rpe ?? null },
+        data: { ...(orig?.data || {}), reps: validReps(r.reps), set: i + 1, workout: draft.id, rpe: r.rpe ?? null, type: r.type ?? null },
         deleted_at: null,
       });
     });

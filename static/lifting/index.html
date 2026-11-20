@@ -14,6 +14,7 @@
     --muted: #8b95a3; --accent: #4f9cff; --danger: #ff6b6b; --good: #4cc38a; --warn: #f5a524;
     --grid: #232a33; --nav-h: 64px;
     /* Muscle-group colours: the dataviz reference categorical palette, dark steps, fixed order */
+    --ss-0: #c98500; --ss-1: #199e70; --ss-2: #d55181;
     --g-chest: #3987e5; --g-back: #d95926; --g-shoulders: #199e70; --g-arms: #c98500; --g-legs: #d55181; --g-core: #0ca30c;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -224,6 +225,43 @@
   .wrapchips { flex-wrap: wrap; }
   .lbl { display: block; font-size: 14px; color: var(--muted); margin: 16px 0 6px; }
   .lbl input { margin-top: 6px; color: var(--text); font-size: 18px; }
+
+  /* Workout editor: menus, cues, supersets, set types, swipe-to-delete */
+  .dots.on { color: var(--accent); }
+  .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 10px; }
+  .menu-grid .secondary { min-height: 44px; font-size: 15px; }
+  .secondary[disabled] { opacity: .4; }
+  .cue { display: block; width: 100%; text-align: left; background: rgb(245 165 36 / .12); border: 0; border-left: 3px solid var(--warn);
+    border-radius: 8px; padding: 8px 10px; margin: 2px 0 8px; font-size: 14px; color: var(--text); white-space: pre-wrap; }
+  .cue.static { margin: 4px 0 12px; }
+  .cue-edit textarea { margin: 4px 0 6px; }
+  .cue-edit .ex-menu { justify-content: flex-end; }
+  .cue-edit .ex-menu > * { flex: none; }
+  .ex.ss { border-left: 3px solid var(--ss); padding-left: 10px; margin-left: -13px; }
+  .ex.ss-mid { padding-bottom: 6px; }
+  .ex.ss + .ex.ss { margin-top: 0; padding-top: 14px; }
+  .sslabel { font-size: 12px; font-weight: 700; color: var(--ss); text-transform: uppercase; letter-spacing: .05em; }
+  .setno.t-warmup { color: var(--warn); }
+  .setno.t-drop { color: #9085e9; }
+  .setno.t-failure { color: var(--danger); }
+  .swipe { position: relative; overflow: hidden; border-radius: 10px; }
+  .swipe .trash { position: absolute; inset: 0 0 0 auto; width: 76px; border: 0; border-radius: 10px;
+    background: var(--danger); color: #fff; font-size: 20px; visibility: hidden; }
+  .swipe.open .trash, .swipe:has(.setrow[style*="translate"]) .trash { visibility: visible; }
+  .swipe .setrow { position: relative; background: var(--bg); transition: transform .18s ease; touch-action: pan-y; }
+  .swipe .setrow.done { background: #17271f; }
+
+  /* Picker: multi-select */
+  .pkitem.sel { background: rgb(79 156 255 / .12); border-radius: 10px; }
+  .pkitem.sel .pkcheck { background: var(--accent); color: #fff; }
+  .pkcheck { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--line);
+    display: grid; place-items: center; font-size: 14px; font-weight: 700; }
+  .pkitem small { font-size: 13px; }
+  .pkbar { position: sticky; bottom: 0; display: flex; gap: 8px; padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(transparent, var(--bg) 30%); }
+  .pkbar .secondary { width: auto; padding: 0 14px; }
+  .pkbar .primary { flex: 1; }
+  .pkitem:active, .rowbtn:active, .wcard:active { background: var(--card2); }
 
   .toast {
     position: fixed; left: 50%; transform: translateX(-50%); z-index: 30;

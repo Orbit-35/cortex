@@ -57,6 +57,7 @@ export function totals(workouts) {
   for (const w of workouts) {
     minutes += w.duration_min || 0;
     for (const x of w.exercises) for (const s of x.sets) {
+      if (s.data?.type === "warmup") continue; // warm-ups don't count (DESIGN D37)
       sets += 1;
       reps += s.data?.reps || 0;
       volumeKg += toKg(s.value, s.unit) * (s.data?.reps || 0);
