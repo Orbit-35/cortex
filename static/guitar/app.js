@@ -153,7 +153,7 @@ async function start() {
     });
   } catch (err) {
     msg.innerHTML = `<span class="err">${err.name === "NotAllowedError"
-      ? "Microphone access is blocked. Allow it in Android Settings → Apps → Cortex → Permissions (or the lock icon next to the address in the browser)."
+      ? "Microphone access is blocked. Installed web apps get it through Chrome: open Chrome → ⋮ → Settings → Site settings → Microphone, find the Cortex address and set it to Allow. Also check Android Settings → Apps → Chrome → Permissions → Microphone is allowed. Then reopen Cortex."
       : "Couldn't open the microphone: " + err.message}</span>`;
     return;
   }
