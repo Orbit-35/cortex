@@ -11,6 +11,11 @@
 const VERSION = "__VERSION__"; // replaced by the server (main.py /sw.js)
 const CACHE = `cortex-shell-${VERSION}`;
 const SHELL = [
+  "/",
+  "/guitar/",
+  "/guitar/app.js",
+  "/guitar/pitch.js",
+  "/guitar/music.js",
   "/lifting/",
   "/lifting/app.js",
   "/lifting/stats.js",

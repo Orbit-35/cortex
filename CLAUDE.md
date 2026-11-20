@@ -26,6 +26,7 @@ A personal software platform: one core (FastAPI + SQLite + login, later) with sm
 - New module = new page + conventions on `entries`, not new tables (unless truly needed).
 - Lifting convention (DESIGN D22–D26): sets are `module=lifting`, `metric=<exercise key>` (e.g. `bench_press`, permanent), `value`=weight as typed, `unit=lb|kg`, `data={"reps", "set", "workout": <workout client_id>}`. Workouts are `metric=_workout`; custom/edited exercises `metric=_exercise` (id `exercise:<key>`); settings `module=settings`. Metrics starting with `_` are never sets.
 - Lifting page code: `static/lifting/` = `app.js` (UI) + pure modules `workouts.js`, `library.js`, `units.js`, `stats.js`, `progress.js` (tested: `node tests/*.test.mjs`).
+- Home launcher at `static/index.html` (`/`). Guitar: `static/guitar/` = `app.js` (tuner UI) + pure `pitch.js` (YIN) and `music.js` (notes, tunings); stores nothing on the server (DESIGN D42–D43).
 - Importers (later): each converts one app's export/API into entries; always set `source` + `external_id`; keep raw files under `raw/` (gitignored).
 
 ## Running
@@ -33,7 +34,7 @@ A personal software platform: one core (FastAPI + SQLite + login, later) with sm
 .\.venv\Scripts\Activate.ps1
 uvicorn main:app --reload --host 0.0.0.0
 ```
-API docs at http://localhost:8000/docs, lifting page at http://localhost:8000/lifting/.
+API docs at http://localhost:8000/docs, home at http://localhost:8000/, lifting at /lifting/, tuner at /guitar/.
 
 ## Target devices
 - Phone: Android 13 is the ceiling (Chrome / Samsung Internet). Mobile-first: big tap targets, one-handed, fast logging between sets.
@@ -48,7 +49,7 @@ API docs at http://localhost:8000/docs, lifting page at http://localhost:8000/li
 ## Roadmap
 Future ideas (not scheduled) live in `IDEAS.md`; add new ones there.
 
-Core (started) → Lifting (installed on phone via Tailscale ✓; step 1 workouts + 5 tabs ✓, step 2 Progress overview + Exercises editing ✓ → 3 Bodyweight → 4 Profile → 5 photos/posts; rest timer later) → Body/food → Video challenge → Importers → Android companion (volume slider, sound-dose logger) → maybe PC clipboard companion → Guitar practice app.
+Core (started) → Lifting (installed on phone via Tailscale ✓; step 1 workouts + 5 tabs ✓, step 2 Progress overview + Exercises editing ✓ → 3 Bodyweight → 4 Profile → 5 photos/posts; rest timer later) → Body/food → Video challenge → Importers → Android companion (volume slider, sound-dose logger) → maybe PC clipboard companion → Guitar (tuner ✓; song lists, practice log next).
 
 ### Lifting changes queued (owner's feedback, not done yet)
 - Deleting a set never asks for confirmation (undo D41 for sets).

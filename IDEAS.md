@@ -55,7 +55,7 @@ Control audio precisely, track listening, and protect hearing.
 
 ## Guitar
 
-- **Tuner, no ads:** listens through the microphone and shows the note and how many cents sharp or flat. Standard tuning plus drop D, half-step down and custom tunings. *How:* works as a web page today, using the microphone and a pitch-detection algorithm (YIN or autocorrelation). Offline, private, no ads. One of the easiest ideas on this list.
+- **Tuner, no ads (built, DESIGN D43):** listens through the microphone and shows the note and how many cents sharp or flat. Standard tuning plus drop D, half-step down and custom tunings. *How:* works as a web page today, using the microphone and a pitch-detection algorithm (YIN or autocorrelation). Offline, private, no ads. One of the easiest ideas on this list.
 - **Song lists:** songs you can play, songs you're learning (with progress, notes, tabs/links), and a wishlist, linked to **Spotify** playlists. *How:* Spotify's API (log in once with your account) can create and read playlists, so "Can play" and "Learning" could be real playlists you listen to.
 - **Practice log:** minutes practised, what you worked on, streaks. Same pattern as workouts.
 

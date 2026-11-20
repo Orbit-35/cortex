@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
@@ -376,11 +376,6 @@ def service_worker():
 @app.get("/api/version")
 def version():
     return {"version": app_version()}
-
-
-@app.get("/")
-def home():
-    return RedirectResponse("/lifting/")
 
 
 app.mount("/", StaticFiles(directory=BASE_DIR / "static", html=True), name="static")

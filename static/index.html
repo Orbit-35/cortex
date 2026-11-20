@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icons/icon-192.png">
+<title>Cortex</title>
+<style>
+  :root { --bg: #111418; --card: #1b2027; --line: #2a313b; --text: #e8ecf1; --muted: #8b95a3; --accent: #4f9cff; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { color-scheme: dark; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  .wrap { max-width: 560px; margin-inline: auto; padding: calc(16px + env(safe-area-inset-top)) 16px 24px; }
+  h1 { font-size: 28px; margin: 4px 0 20px; }
+  .apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+  .app { display: flex; flex-direction: column; gap: 14px; padding: 16px; min-height: 130px; background: var(--card);
+    border: 1px solid var(--line); border-radius: 18px; color: var(--text); text-decoration: none; }
+  .app:active { transform: scale(.98); }
+  .app svg { width: 34px; height: 34px; fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .app b { font-size: 18px; }
+  .app span { font-size: 14px; color: var(--muted); margin-top: -10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Cortex</h1>
+  <div class="apps">
+    <a class="app" href="/lifting/">
+      <svg viewBox="0 0 24 24"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg>
+      <b>Lifting</b><span>Workouts and progress</span>
+    </a>
+    <a class="app" href="/guitar/">
+      <svg viewBox="0 0 24 24"><path d="M14.5 9.5l5-5M18 3l3 3M14 10a3.5 3.5 0 0 0-5-.5c-.8.8-.9 1.8-1.7 2.2-1 .5-2.6.2-3.6 1.2-1.6 1.6-1 4.4.9 6.3s4.7 2.5 6.3.9c1-1 .7-2.6 1.2-3.6.4-.8 1.4-.9 2.2-1.7a3.5 3.5 0 0 0-.3-4.8z"/><circle cx="10" cy="14" r="1.3"/></svg>
+      <b>Guitar</b><span>Tuner</span>
+    </a>
+  </div>
+</div>
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});</script>
+</body>
+</html>
