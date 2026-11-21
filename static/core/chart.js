@@ -16,7 +16,8 @@ export function lineChart(points, { W = 340, H = 220, pad = { l: 48, r: 12, t: 4
   const t = points.map((p) => p.t), v = points.map((p) => p.v);
   const { lo, hi, step } = niceTicks(Math.min(...v), Math.max(...v));
   const span = t.at(-1) - t[0];
-  const x = (ms) => (span ? pad.l + (ms - t[0]) / span * (W - pad.l - pad.r) : (pad.l + W - pad.r) / 2);
+  const inset = 10; // keep the end dots off the y-axis labels
+  const x = (ms) => (span ? pad.l + inset + (ms - t[0]) / span * (W - pad.l - pad.r - 2 * inset) : (pad.l + W - pad.r) / 2);
   const y = (val) => pad.t + (hi - val) / (hi - lo) * (H - pad.t - pad.b);
   const xs = t.map(x), ys = v.map(y);
   let markup = "";
