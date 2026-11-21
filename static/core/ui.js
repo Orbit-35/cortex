@@ -75,6 +75,14 @@ export function toast(text, ms = 3200) {
   toastTimer = setTimeout(() => (toastEl.hidden = true), ms);
 }
 
+// Long-press is a gesture in Cortex: no copy/share/open-link menu outside text fields.
+// (Pages also set user-select: none on body and allow it again on inputs.)
+export function noCallout() {
+  document.addEventListener("contextmenu", (ev) => {
+    if (!ev.target.closest("input, textarea, [contenteditable], .selectable")) ev.preventDefault();
+  });
+}
+
 // Register the service worker and reload into a new version as soon as it's installed (DESIGN D36).
 // canReload() can say "not now" (e.g. unsaved typing); the update then loads on the next open.
 export function keepUpdated(canReload = () => true) {

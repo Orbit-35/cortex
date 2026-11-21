@@ -1,7 +1,7 @@
 // Guitar tuner page. Audio stays on the device: the mic feeds an analyser, nothing is recorded or sent.
 // Custom tunings are Cortex entries (module=guitar, metric=_tuning), so they sync like everything else (D44).
 import * as cortex from "/core/cortex.js";
-import { ask, cancelAsk, toast, keepUpdated } from "/core/ui.js";
+import { ask, cancelAsk, toast, keepUpdated, noCallout } from "/core/ui.js";
 import { detectPitch } from "./pitch.js";
 import { TUNINGS, noteText, parseNote, midiToFreq, centsOff, nearestNote, closestString, median, display } from "./music.js";
 
@@ -435,3 +435,4 @@ loadCustom().then(() => cortex.startAutoSync());
 start(); // straight into listening: the browser asks for the mic the first time
 
 keepUpdated(() => !draftDirty()); // don't reload away a half-made custom tuning
+noCallout();

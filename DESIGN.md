@@ -224,7 +224,7 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Decision:** tapping exercises in the picker toggles a numbered selection; a bottom bar adds them all (in tap order), or adds them as a superset. Creating an exercise opens the full form (name, main and helper muscles, cue) and selects it on save.
 - **Why:** adding one exercise per trip through the picker was slow and gave no feedback; creating exercises without muscles left them out of the muscle charts.
 
-### D41. In-app confirm dialog for anything that loses data
+### D41. In-app confirm dialog for anything that loses data (set deletes changed by D49)
 - **Decision:** destructive or final actions ask first in a styled bottom dialog (`ask()` in `app.js`) instead of the browser's `confirm()`. It covers deleting a set that has values, removing an exercise from a workout (always), cancelling or deleting a workout, finishing a workout, leaving an edit with unsaved changes, merging and hiding exercises. The dangerous button is red and on the right; the safe one is labelled with what it keeps ("Keep going", not "Cancel", when the action itself is called Cancel). Tapping outside or the back gesture means no.
 - **Why:** the owner wanted more confirmation. The browser's `confirm()` shows the site address, looks like a system error, and is easy to tap through mid-set.
 - **Trade-off:** one extra tap on Finish and on removals. Empty sets still delete without asking, since nothing is lost.
@@ -266,6 +266,11 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 ### D48. Tuner meter back to the first version
 - **Decision:** the meter is the original simple needle gauge from D43 (needle, ±50 scale, green in-tune mark, note, "Tune up / Tune down / In tune", Hz and cents line). Kept from later work: the tuning button and list, custom tunings and their confirmations (D44), the pink theme (D45), and starting to listen on open with inline mic messages (D47).
 - **Why:** the owner preferred the first version after trying both redesigns ("something feels off"). Open question for later: what exactly felt better about it.
+
+### D49. Long-press is a gesture, not text selection; deleting a set never asks
+- **Decision:** every page sets `user-select: none` and `-webkit-touch-callout: none` on the body and allows selection again in inputs, textareas and `.selectable`; `noCallout()` in `core/ui.js` blocks the long-press context menu outside text fields. Deleting a single set (swipe or set menu) happens straight away with no dialog; everything else in D41 still confirms.
+- **Why:** the owner long-presses rows and cards and got Chrome's text selection instead; long-press will also start drag-to-reorder. The set confirm felt like friction for something small and quick to retype.
+- **Trade-off:** a mis-swipe loses a typed set (an Undo toast is an open question in docs/PLAN.md). Text outside inputs can't be copied unless marked `.selectable`.
 
 ## Security and hosting
 

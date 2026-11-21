@@ -2,7 +2,7 @@
 // All data goes through the Cortex core (saved on this device first, synced in the
 // background). The maths and data shaping live in the pure modules imported below.
 import * as cortex from "/core/cortex.js";
-import { ask as uiAsk, cancelAsk } from "/core/ui.js";
+import { ask as uiAsk, cancelAsk, noCallout } from "/core/ui.js";
 import { e1rm, dayKey, personalRecords, prKind, sessionSeries } from "/lifting/stats.js";
 import { convert, showWeight, parseWeight, fmtNum } from "/lifting/units.js";
 import { MUSCLES, resolveExercises, exerciseFor, exerciseId, newKey } from "/lifting/library.js";
@@ -94,6 +94,8 @@ document.querySelector("nav.tabbar").addEventListener("click", (ev) => {
   showTab(b.dataset.tab);
   scrollTo(0, 0);
 });
+
+noCallout();
 
 function render() {
   if (tab === "log") renderLog();
@@ -441,16 +443,9 @@ $("editor").addEventListener("click", async (ev) => {
     case "rpe": ex.sets[si].rpe = b.dataset.v === "" ? null : Number(b.dataset.v); break;
     case "setup": swap(ex.sets, si, si - 1); editor.setMenu = `${xi}:${si - 1}`; break;
     case "setdown": swap(ex.sets, si, si + 1); editor.setMenu = `${xi}:${si + 1}`; break;
-    case "delset": {
-      const r = ex.sets[si];
-      if ((r.weight || r.reps || r.done) &&
-          !(await ask(`Delete set ${si + 1} of ${exName(ex.key)}?`, [r.weight && `${r.weight} ${d.unit}`, r.reps && `${r.reps} reps`].filter(Boolean).join(" × ")))) {
-        closeSwipe();
-        return;
-      }
+    case "delset": // no confirm for a single set (owner's choice, DESIGN D49)
       ex.sets.splice(si, 1); editor.setMenu = null; swipedRow = null;
       break;
-    }
     case "useprev": {
       const p = previousSets(workouts, ex.key, d.start, d.id)[si];
       if (!p) return;
