@@ -38,7 +38,7 @@ Rate and remember **movies, shows, books, albums, restaurants**, and anything el
 
 ## Audio and ear care
 
-Control audio precisely, track listening, and protect hearing.
+Control audio precisely, track listening, and protect hearing. Research notes: `docs/research/audio.md`.
 
 - **A better volume slider:** Android's volume moves in about 15-25 fixed steps, and each step is a bigger jump than it feels (loudness is logarithmic). Goal: a **continuous slider in decibels**, so you can set an exact level you know is safe and still right for the situation.
 - **Same loudness across headphones:** earbuds and over-ear headphones need different slider positions for the same loudness. It's less about distance than about **sensitivity** (how loud a headphone plays from the same signal) and **seal/fit** (in-ear blocks outside noise, open headphones leak).
@@ -54,6 +54,8 @@ Control audio precisely, track listening, and protect hearing.
 - *How:* needs the **native Android app**. Fine-grained volume can come from combining the system's steps with an extra digital gain stage (some existing apps do this through Android's audio-effects API). Stats need a background service. Real exact dB SPL needs per-headphone calibration; without it, levels are relative ("+3 dB louder than usual").
 
 ## Guitar
+
+Research notes for songs and the practice log: `docs/research/guitar-songs-practice.md`.
 
 - **Tuner, no ads (built, DESIGN D43):** listens through the microphone and shows the note and how many cents sharp or flat. Standard tuning plus drop D, half-step down and custom tunings. *How:* works as a web page today, using the microphone and a pitch-detection algorithm (YIN or autocorrelation). Offline, private, no ads. One of the easiest ideas on this list.
 - **Songs + practice log (next, build together):** guitar gets bottom tabs (Tuner, Songs, Practice).
@@ -81,6 +83,6 @@ Control audio precisely, track listening, and protect hearing.
 ## Platform
 
 - **Standalone apps:** Android (Capacitor) and Windows (Tauri) over the same core.
-  - *Android research (Nov 2026):* Capacitor 8 needs Android Studio Otter (2025.2.1+), which brings its own JDK 21; Android 7+ (our phone is 13). Not installed on the PC yet (~10 GB). The app gets its **own** microphone permission (manifest `RECORD_AUDIO`, granted through the WebView's permission request), so "Ask every time" works for Cortex itself. getUserMedia needs a secure origin: either bundled files (`https://localhost`) or `server.url` pointing at the HTTPS Tailscale address; plain HTTP breaks the mic. Option A, `server.url` = Tailscale address: updates are instant like the web app, but the first launch needs the PC reachable. Option B, bundled files: works fully offline, needs CORS on the API and a rebuild/reinstall per change. Start with A while the app changes daily. See DESIGN.md, "Future: standalone apps". Several ideas above (text-selection menu, PC shortcut, audio control, rest-timer notifications) need these.
+  - *Android research (Nov 2026):* Capacitor 8 needs Android Studio Otter (2025.2.1+), which brings its own JDK 21; Android 7+ (our phone is 13). Not installed on the PC yet (~10 GB). The app gets its **own** microphone permission (manifest `RECORD_AUDIO`, granted through the WebView's permission request), so "Ask every time" works for Cortex itself. getUserMedia needs a secure origin: either bundled files (`https://localhost`) or `server.url` pointing at the HTTPS Tailscale address; plain HTTP breaks the mic. Option A, `server.url` = Tailscale address: updates are instant like the web app, but the first launch needs the PC reachable. Option B, bundled files: works fully offline, needs CORS on the API and a rebuild/reinstall per change. **Update (later research, Nov 2026): go with B.** A breaks offline use and clashes with the service worker (plugins vanish); Capacitor documents `server.url` as development-only. Full notes: `docs/research/android-app.md`. See DESIGN.md, "Future: standalone apps". Several ideas above (text-selection menu, PC shortcut, audio control, rest-timer notifications) need these.
 - **Login and other people:** accounts, each person's data kept separate. Needed before anyone else uses Cortex and before the standalone apps can sync.
 - **Always-on server:** Raspberry Pi or a hosted server, so sync doesn't depend on the PC being on.
