@@ -190,7 +190,7 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Why:** stays correct after edits, deletes and merges, and old PRs that were later beaten still count.
 - **Trade-off:** cost grows with history (fine for thousands of sets; cache it if it ever gets slow).
 
-### D34. Volume milestones use rough, commonly cited weights
+### D34. Volume milestones use rough, commonly cited weights (icons are Lucide names since D51)
 - **Decision:** a fixed list of ~20 objects from a Labrador (30 kg) to the Great Pyramid in `progress.js`, with our own selection and wording.
 - **Why:** fun, and only needs to be roughly right.
 - **Trade-off:** the figures are approximate; changing the list changes everyone's "next milestone".
@@ -276,6 +276,11 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Decision:** the line-chart maths (nice ticks, scales, labels, line, dots) lives in `static/core/chart.js` as pure functions returning SVG markup; pages add their own crosshair and tooltip. With one data point the chart shows a centred dot and one date label, no line, plus "Log another session to see a trend". With none it says so.
 - **Why:** the owner wanted a chart even after the first session, and Guitar (tempo charts) and Bodyweight need the same chart. Pure functions can be tested in Node (`tests/chart.test.mjs`); the old code divided by zero with one point.
 - **Trade-off:** the page still owns interaction code; a second page that wants a tooltip copies ~15 lines until that's shared too.
+
+### D51. Icons are Lucide SVGs from one shared file; no emoji anywhere
+- **Decision:** every icon is an inline SVG from `static/core/icons.js` (path data copied unchanged from Lucide 1.77.0, licence notice at the top), drawn with the shared `.ic` rule in `core/theme.css` so it takes the text colour. Emoji in the lifting UI (trophy, bin, pin, note, chain, arrows, tick, milestone objects) were replaced. Toasts stay plain text. `tests/icons.test.mjs` fails if an emoji or arrow symbol appears in `static/` outside a code comment.
+- **Why:** the owner dislikes emoji; they render differently on every phone, can't follow the pink theme, and look out of place in the native app. Lucide matches the existing tab-bar icons (24 px grid, stroke 2, round ends) and its ISC licence is fine for a public repo.
+- **Trade-off:** milestone objects without a Lucide picture use the nearest one (paw print for horse and elephant, fish for whales, bone for T. rex). New icons must be copied in from lucide-static, never drawn from memory.
 
 ## Security and hosting
 

@@ -4,6 +4,7 @@
 import * as cortex from "/core/cortex.js";
 import { ask as uiAsk, cancelAsk, noCallout } from "/core/ui.js";
 import { lineChart, chartDots } from "/core/chart.js";
+import { icon } from "/core/icons.js";
 import { e1rm, dayKey, personalRecords, prKind, sessionSeries } from "/lifting/stats.js";
 import { convert, showWeight, parseWeight, fmtNum } from "/lifting/units.js";
 import { MUSCLES, resolveExercises, exerciseFor, exerciseId, newKey } from "/lifting/library.js";
@@ -137,11 +138,11 @@ function renderLog() {
       if (m !== month) { html += `<h2>${esc(m)}</h2>`; month = m; }
       const all = w.exercises.flatMap((x) => x.sets).filter(isWorking);
       const nPr = all.filter((s) => prs.has(s.client_id)).length;
-      const meta = [fmtDuration(w.duration_min), all.length ? `${Math.round(convert(volumeKg(all), "kg", unit)).toLocaleString()} ${unit}` : "", `${all.length} sets`, nPr ? `🏆 ${nPr} PR${nPr > 1 ? "s" : ""}` : ""]
-        .filter(Boolean).join(" · ");
+      const meta = [fmtDuration(w.duration_min), all.length ? `${Math.round(convert(volumeKg(all), "kg", unit)).toLocaleString()} ${unit}` : "", `${all.length} sets`]
+        .filter(Boolean).map(esc).concat(nPr ? [`<span class="pr-tag">${icon("trophy")} ${nPr} PR${nPr > 1 ? "s" : ""}</span>`] : []).join(" · ");
       html += `<button class="card wcard" data-act="open" data-id="${esc(w.id)}">
         <div class="head"><span class="name">${esc(w.name)}</span><span class="muted small">${esc(fmtDate(w.start))}</span></div>
-        <div class="muted small">${esc(meta)}</div>
+        <div class="muted small">${meta}</div>
         <div class="lines">${w.exercises.filter((x) => x.sets.length).map((x) => {
           const work = x.sets.filter(isWorking);
           const b = bestSet(work);
@@ -299,7 +300,7 @@ function renderEditor() {
 
   let html = `<div class="wrap">
     <div class="sheet-top">
-      <button class="back" data-act="close" aria-label="Back">‹</button>
+      <button class="back" data-act="close" aria-label="Back">${icon("chevron-left")}</button>
       <div class="title">${title}</div>
       <button class="primary sm" data-act="save">${live ? "Finish" : "Save"}</button>
     </div>
@@ -327,24 +328,24 @@ function renderEditor() {
       ${s.first ? `<div class="sslabel">Superset</div>` : ""}
       <div class="ex-head">
         <button class="exname" data-act="exinfo">${esc(def.name)}</button>
-        <button class="ghost dots${menuOpen ? " on" : ""}" data-act="exmenu" aria-label="Options for ${esc(def.name)}" aria-expanded="${menuOpen}">•••</button>
+        <button class="ghost dots${menuOpen ? " on" : ""}" data-act="exmenu" aria-label="Options for ${esc(def.name)}" aria-expanded="${menuOpen}">${icon("ellipsis")}</button>
       </div>
       ${menuOpen ? `<div class="menu-grid">
-        <button class="secondary" data-act="exnote">📝 Note for today</button>
-        <button class="secondary" data-act="excue">📌 ${def.cue ? "Edit" : "Add"} cue</button>
-        <button class="secondary" data-act="exup" ${xi === 0 ? "disabled" : ""}>↑ Move up</button>
-        <button class="secondary" data-act="exdown" ${xi === d.exercises.length - 1 ? "disabled" : ""}>↓ Move down</button>
-        ${ex.group && s.color ? `<button class="secondary" data-act="exunss">Leave superset</button>`
-          : `<button class="secondary" data-act="exss" ${xi === d.exercises.length - 1 ? "disabled" : ""}>⛓ Superset with next</button>`}
-        <button class="secondary danger" data-act="exremove">✕ Remove</button>
+        <button class="secondary" data-act="exnote">${icon("notebook-pen")} Note for today</button>
+        <button class="secondary" data-act="excue">${icon("pin")} ${def.cue ? "Edit" : "Add"} cue</button>
+        <button class="secondary" data-act="exup" ${xi === 0 ? "disabled" : ""}>${icon("arrow-up")} Move up</button>
+        <button class="secondary" data-act="exdown" ${xi === d.exercises.length - 1 ? "disabled" : ""}>${icon("arrow-down")} Move down</button>
+        ${ex.group && s.color ? `<button class="secondary" data-act="exunss">${icon("unlink-2")} Leave superset</button>`
+          : `<button class="secondary" data-act="exss" ${xi === d.exercises.length - 1 ? "disabled" : ""}>${icon("link-2")} Superset with next</button>`}
+        <button class="secondary danger" data-act="exremove">${icon("x")} Remove</button>
       </div>` : ""}
       ${editor.cueEdit === xi
         ? `<div class="cue-edit"><textarea data-f="cue" rows="2" placeholder="Cues that work for you, shown every time you do ${esc(def.name)}">${esc(def.cue)}</textarea>
             <div class="ex-menu"><button class="secondary" data-act="cuecancel">Cancel</button><button class="primary sm" data-act="cuesave">Save cue</button></div></div>`
-        : def.cue ? `<button class="cue" data-act="excue">📌 ${esc(def.cue)}</button>` : ""}
+        : def.cue ? `<button class="cue" data-act="excue">${icon("pin")} ${esc(def.cue)}</button>` : ""}
       ${showNotes ? `<textarea data-f="exnotes" rows="1" placeholder="Notes for today's ${esc(def.name)}">${esc(ex.notes)}</textarea>` : ""}
       <div class="grid ${live ? "live" : "edit"}">
-        <div class="ghead">Set</div><div class="ghead l">Previous</div><div class="ghead">${esc(d.unit)}</div><div class="ghead">Reps</div>${live ? `<div class="ghead">✓</div>` : ""}
+        <div class="ghead">Set</div><div class="ghead l">Previous</div><div class="ghead">${esc(d.unit)}</div><div class="ghead">Reps</div>${live ? `<div class="ghead">${icon("check", { label: "Done" })}</div>` : ""}
       </div>`;
     ex.sets.forEach((r, si) => {
       // Hints only in a live workout, where ticking an empty row uses them. Elsewhere an
@@ -353,13 +354,13 @@ function renderEditor() {
       const p = prev[si];
       const label = labels[si];
       html += `<div class="swipe" data-s="${si}">
-        <button class="trash" data-act="delset" aria-label="Delete set" tabindex="-1">🗑</button>
+        <button class="trash" data-act="delset" aria-label="Delete set" tabindex="-1">${icon("trash-2")}</button>
         <div class="grid setrow ${live ? "live" : "edit"}${r.done && live ? " done" : ""}">
-          <button class="setno t-${r.type || "normal"}" data-act="setmenu" aria-label="Set ${label} options">${r.pr ? "🏆" : label}${r.rpe != null ? `<small>@${r.rpe}</small>` : ""}</button>
+          <button class="setno t-${r.type || "normal"}" data-act="setmenu" aria-label="Set ${label} options${r.pr ? ", personal record" : ""}">${r.pr ? icon("trophy") : label}${r.rpe != null ? `<small>@${r.rpe}</small>` : ""}</button>
           <button class="prev" data-act="useprev" ${p ? "" : "disabled"}>${p ? esc(setText(p)) : "—"}</button>
           <input data-f="weight" inputmode="decimal" value="${esc(r.weight)}" placeholder="${esc(hint.weight)}" aria-label="Weight">
           <input data-f="reps" inputmode="numeric" value="${esc(r.reps)}" placeholder="${esc(hint.reps)}" aria-label="Reps">
-          ${live ? `<button class="tick" data-act="tick" aria-pressed="${r.done}" aria-label="Set done">✓</button>` : ""}
+          ${live ? `<button class="tick" data-act="tick" aria-pressed="${r.done}" aria-label="Set done">${icon("check")}</button>` : ""}
         </div>
       </div>`;
       if (editor.setMenu === `${xi}:${si}`) {
@@ -371,8 +372,8 @@ function renderEditor() {
           <div class="chips wrapchips">${RPES.map((v) => `<button class="chip${r.rpe === v ? " on" : ""}" data-act="rpe" data-v="${v}">${v}</button>`).join("")}
             ${r.rpe != null ? `<button class="chip" data-act="rpe" data-v="">Clear</button>` : ""}</div>
           <div class="ex-menu">
-            <button class="secondary" data-act="setup" ${si === 0 ? "disabled" : ""}>↑</button>
-            <button class="secondary" data-act="setdown" ${si === ex.sets.length - 1 ? "disabled" : ""}>↓</button>
+            <button class="secondary" data-act="setup" ${si === 0 ? "disabled" : ""} aria-label="Move set up">${icon("arrow-up")}</button>
+            <button class="secondary" data-act="setdown" ${si === ex.sets.length - 1 ? "disabled" : ""} aria-label="Move set down">${icon("arrow-down")}</button>
             <button class="secondary danger" data-act="delset">Delete set</button>
           </div></div>`;
       }
@@ -572,8 +573,8 @@ function tick(xi, si) {
   ];
   const kind = prKind({ value: w, unit: d.unit, data: { reps: n }, recorded_at: r.at }, earlier);
   r.pr = kind;
-  if (kind === "e1rm") toast(`🏆 New best: ~${fmtNum(Math.round(convert(e1rm(convert(w, d.unit, "kg"), n), "kg", d.unit) * 10) / 10)} ${d.unit} estimated 1RM`);
-  else if (kind === "reps") toast(`🏆 Rep PR: heaviest ${n}-rep set yet`);
+  if (kind === "e1rm") toast(`New best: ~${fmtNum(Math.round(convert(e1rm(convert(w, d.unit, "kg"), n), "kg", d.unit) * 10) / 10)} ${d.unit} estimated 1RM`);
+  else if (kind === "reps") toast(`Rep PR: heaviest ${n}-rep set yet`);
   if (navigator.vibrate) navigator.vibrate(kind ? [30, 60, 30] : 25);
 }
 
@@ -614,7 +615,7 @@ function openPicker(mode = { kind: "add" }) {
   pickerSel = [];
   openOverlay("picker").innerHTML = `<div class="wrap">
     <div class="sheet-top">
-      <button class="back" data-act="pkclose" aria-label="Back">‹</button>
+      <button class="back" data-act="pkclose" aria-label="Back">${icon("chevron-left")}</button>
       <input class="pk-search" id="pksearch" placeholder="${mode.kind === "merge" ? `Merge ${esc(exName(mode.from))} into…` : "Search"}" autocomplete="off" enterkeyhint="search">
       <button class="ghost" data-act="pknew">${mode.kind === "merge" ? "" : "+ New"}</button>
     </div>
@@ -726,12 +727,12 @@ function renderProgress() {
     <div class="card milestone">
       <div class="k">You've lifted</div>
       <div class="v">${fmtBig(vol)} ${unit}</div>
-      ${ms.last ? `<div>That's <b>${fmtTimes(t.volumeKg / ms.last.kg)} × ${esc(ms.last.name)}</b> ${ms.last.icon}</div>` : ""}
+      ${ms.last ? `<div>That's <b>${fmtTimes(t.volumeKg / ms.last.kg)} × ${esc(ms.last.name)}</b> ${icon(ms.last.icon)}</div>` : ""}
       ${ms.next ? `<div class="bar" role="progressbar" aria-valuenow="${Math.round(ms.progress * 100)}" aria-valuemin="0" aria-valuemax="100"><span style="width:${(ms.progress * 100).toFixed(1)}%"></span></div>
-        <div class="muted small">Next: ${ms.next.icon} ${esc(ms.next.name)} (${fmtBig(convert(ms.next.kg, "kg", unit))} ${unit}) · ${Math.floor(ms.progress * 100)}%</div>` : ""}
-      ${ms.journey.length ? `<button class="ghost" data-act="journey" style="padding:0;margin-top:6px">${journeyOpen ? "Hide" : "See"} your journey ›</button>` : ""}
+        <div class="muted small">Next: ${icon(ms.next.icon)} ${esc(ms.next.name)} (${fmtBig(convert(ms.next.kg, "kg", unit))} ${unit}) · ${Math.floor(ms.progress * 100)}%</div>` : ""}
+      ${ms.journey.length ? `<button class="ghost" data-act="journey" style="padding:0;margin-top:6px">${journeyOpen ? "Hide" : "See"} your journey ${icon(journeyOpen ? "chevron-up" : "chevron-down")}</button>` : ""}
       ${journeyOpen ? `<ul class="list journey">${ms.journey.map((o) =>
-        `<li><span>${o.icon} ${esc(o.name)} <span class="muted small">${fmtBig(convert(o.kg, "kg", unit))} ${unit}</span></span><b>${fmtTimes(o.times)}×</b></li>`).join("")}</ul>` : ""}
+        `<li><span>${icon(o.icon)} ${esc(o.name)} <span class="muted small">${fmtBig(convert(o.kg, "kg", unit))} ${unit}</span></span><b>${fmtTimes(o.times)}×</b></li>`).join("")}</ul>` : ""}
     </div>
 
     <h2>Muscles worked</h2>
@@ -825,7 +826,7 @@ const METRICS = {
 function renderExerciseInto(el, key) {
   const mine = workSets.filter((s) => s.metric === key);
   const cue = exerciseFor(lib, key).cue;
-  if (!mine.length) { el.innerHTML = `${cue ? `<div class="cue static">📌 ${esc(cue)}</div>` : ""}<p class="empty">No sets of ${esc(exName(key))} yet.</p>`; return; }
+  if (!mine.length) { el.innerHTML = `${cue ? `<div class="cue static">${icon("pin")} ${esc(cue)}</div>` : ""}<p class="empty">No sets of ${esc(exName(key))} yet.</p>`; return; }
   const series = sessionSeries(mine);
   const { best, reps } = personalRecords(mine);
   const top = series.reduce((a, d) => (d[chartMetric] > a[chartMetric] ? d : a), series[0]);
@@ -833,7 +834,7 @@ function renderExerciseInto(el, key) {
   const gain = series.length > 1 ? top[chartMetric] - first[chartMetric] : 0;
   const sessions = workouts.filter((w) => w.exercises.some((x) => x.key === key && x.sets.length));
 
-  el.innerHTML = `${cue ? `<div class="cue static">📌 ${esc(cue)}</div>` : ""}
+  el.innerHTML = `${cue ? `<div class="cue static">${icon("pin")} ${esc(cue)}</div>` : ""}
     <div class="chips" role="group" aria-label="Chart">${Object.entries(METRICS).map(([k, m]) =>
       `<button class="chip${k === chartMetric ? " on" : ""}" data-metric="${k}">${m.label}</button>`).join("")}</div>
     <div class="hero">
@@ -863,7 +864,7 @@ function renderExerciseInto(el, key) {
         ${x.notes ? `<div class="notes">${esc(x.notes)}</div>` : ""}
         ${(() => { let n = 0; return x.sets.map((st) => {
           const t = st.data?.type;
-          const label = t === "warmup" ? "W" : (n++, prs.has(st.client_id) ? "🏆" : t ? SET_TYPES[t][0] : n);
+          const label = t === "warmup" ? "W" : (n++, prs.has(st.client_id) ? icon("trophy", { label: "PR" }) : t ? SET_TYPES[t][0] : n);
           return `<div class="line${t === "warmup" ? " muted" : ""}"><span class="muted">${label}</span><span>${esc(setText(st))}</span></div>`;
         }).join(""); })()}
       </div>`;
@@ -881,7 +882,7 @@ function openExercise(key) {
   exsheetKey = key;
   openOverlay("exercise").innerHTML = `<div class="wrap">
     <div class="sheet-top">
-      <button class="back" data-act="close" aria-label="Back">‹</button>
+      <button class="back" data-act="close" aria-label="Back">${icon("chevron-left")}</button>
       <div class="title" id="extitle">${esc(exName(key))}</div>
       <button class="ghost" data-act="editex">Edit</button>
     </div>
@@ -1027,7 +1028,7 @@ function renderExerciseEdit() {
     `<button class="chip${isOn(k) ? " on" : ""}" data-${attr}="${k}">${label}</button>`).join("");
   $("exedit").innerHTML = `<div class="wrap">
     <div class="sheet-top">
-      <button class="back" data-act="close" aria-label="Back">‹</button>
+      <button class="back" data-act="close" aria-label="Back">${icon("chevron-left")}</button>
       <div class="title">${e.key ? "Edit exercise" : "New exercise"}</div>
       <button class="primary sm" data-act="saveex">Save</button>
     </div>
@@ -1040,7 +1041,7 @@ function renderExerciseEdit() {
       <div class="chips wrapchips">${muscleChips("primary", (k) => e.primary === k)}</div>
       <div class="lbl">Helper muscles <span class="muted">· count ½ set each</span></div>
       <div class="chips wrapchips">${muscleChips("secondary", (k) => e.secondary.has(k))}</div>
-      <label class="lbl">📌 Cue <span class="muted">· shown every time you do this exercise</span>
+      <label class="lbl">${icon("pin")} Cue <span class="muted">· shown every time you do this exercise</span>
         <textarea id="excue" rows="2" placeholder="e.g. elbows tucked, pause at the bottom">${esc(e.cue)}</textarea></label>
       ${e.key ? `<h2>More</h2>
         <div class="stack">
@@ -1116,13 +1117,13 @@ async function mergeExercise(from, to) {
 // ---------- Profile tab + settings screen ----------
 
 function renderProfile() {
-  $("view-profile").innerHTML = `<p class="empty">Your profile (workout calendar, lifetime stats, picture) is coming later. Settings are behind the ⚙ button at the top.</p>`;
+  $("view-profile").innerHTML = `<p class="empty">Your profile (workout calendar, lifetime stats, picture) is coming later. Settings are behind the gear button at the top.</p>`;
 }
 
 function renderSettings() {
   $("settings").innerHTML = `<div class="wrap">
     <div class="sheet-top">
-      <button class="back" data-act="close" aria-label="Back">‹</button>
+      <button class="back" data-act="close" aria-label="Back">${icon("chevron-left")}</button>
       <div class="title">Settings</div><span></span>
     </div>
     <div class="sheet-body">
@@ -1148,7 +1149,7 @@ async function showVersion() {
   try { server = (await (await fetch("/api/version", { cache: "no-store" })).json()).version; } catch {}
   const el = $("vstate");
   if (!el) return;
-  el.textContent = !server ? "Can't reach the server to check" : server === local ? "Up to date ✓" : "Updating… reopen Cortex in a moment";
+  el.textContent = !server ? "Can't reach the server to check" : server === local ? "Up to date" : "Updating… reopen Cortex in a moment";
 }
 
 $("gear").addEventListener("click", () => { openOverlay("settings"); renderSettings(); });

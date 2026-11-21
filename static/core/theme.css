@@ -14,3 +14,7 @@
   --good: #4cc38a;
   --warn: #f5a524;
 }
+
+/* Inline Lucide icons from core/icons.js: sized to the text, coloured by it. */
+.ic { width: 1.15em; height: 1.15em; fill: none; stroke: currentColor; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round; vertical-align: -.2em; flex: none; }
