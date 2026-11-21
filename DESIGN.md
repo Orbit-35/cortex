@@ -118,7 +118,7 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Why:** raw weight alone hides progress made in reps (80×8 after 80×5 is progress). e1RM puts every set on one scale, and "best per day" turns many sets into one honest point per session. Epley is the most common formula and fine in the 1-10 rep range.
 - **Trade-off:** it's an estimate, increasingly optimistic above ~12 reps. The rep-records table shows the real lifts alongside it.
 
-### D19. Charts are hand-written SVG, no chart library
+### D19. Charts are hand-written SVG, no chart library (maths moved to core/chart.js by D50)
 - **Decision:** `drawChart` in the lifting page builds the SVG directly. Maths lives in `static/lifting/stats.js` (pure functions, tested by `node tests/stats.test.mjs`).
 - **Why:** a CDN library would break offline use (D5) unless vendored and cached, and there's no build step (D15). One line chart is ~60 lines. Keeping the maths separate means the desktop dashboards can reuse it.
 - **Trade-off:** each new chart type is hand work. Revisit (vendor a library into `static/`) when dashboards need many chart types.
@@ -271,6 +271,11 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Decision:** every page sets `user-select: none` and `-webkit-touch-callout: none` on the body and allows selection again in inputs, textareas and `.selectable`; `noCallout()` in `core/ui.js` blocks the long-press context menu outside text fields. Deleting a single set (swipe or set menu) happens straight away with no dialog; everything else in D41 still confirms.
 - **Why:** the owner long-presses rows and cards and got Chrome's text selection instead; long-press will also start drag-to-reorder. The set confirm felt like friction for something small and quick to retype.
 - **Trade-off:** a mis-swipe loses a typed set (an Undo toast is an open question in docs/PLAN.md). Text outside inputs can't be copied unless marked `.selectable`.
+
+### D50. One chart module for all apps; a single session still draws
+- **Decision:** the line-chart maths (nice ticks, scales, labels, line, dots) lives in `static/core/chart.js` as pure functions returning SVG markup; pages add their own crosshair and tooltip. With one data point the chart shows a centred dot and one date label, no line, plus "Log another session to see a trend". With none it says so.
+- **Why:** the owner wanted a chart even after the first session, and Guitar (tempo charts) and Bodyweight need the same chart. Pure functions can be tested in Node (`tests/chart.test.mjs`); the old code divided by zero with one point.
+- **Trade-off:** the page still owns interaction code; a second page that wants a tooltip copies ~15 lines until that's shared too.
 
 ## Security and hosting
 

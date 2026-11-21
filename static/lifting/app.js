@@ -3,6 +3,7 @@
 // background). The maths and data shaping live in the pure modules imported below.
 import * as cortex from "/core/cortex.js";
 import { ask as uiAsk, cancelAsk, noCallout } from "/core/ui.js";
+import { lineChart, chartDots } from "/core/chart.js";
 import { e1rm, dayKey, personalRecords, prKind, sessionSeries } from "/lifting/stats.js";
 import { convert, showWeight, parseWeight, fmtNum } from "/lifting/units.js";
 import { MUSCLES, resolveExercises, exerciseFor, exerciseId, newKey } from "/lifting/library.js";
@@ -900,47 +901,30 @@ $("exsheet").addEventListener("click", (ev) => {
 // Hand-drawn SVG line chart (DESIGN D19): one point per session, x = real time.
 // points: [{ day: "YYYY-MM-DD", v: number in display unit, sub: extra tooltip text }]
 function drawChart(el, points) {
-  if (points.length < 2) {
-    el.innerHTML = `<p class="empty">One session so far. Log another day to see a trend line.</p>`;
+  if (!points.length) {
+    el.innerHTML = `<p class="empty">No data for this chart yet.</p>`;
     return;
   }
-  const W = el.clientWidth || 340, H = 220;
-  const pad = { l: 48, r: 12, t: 40, b: 26 };
-  const t = points.map((d) => new Date(noonOf(d.day)).getTime());
-  const v = points.map((d) => d.v);
-  let lo = Math.min(...v), hi = Math.max(...v);
-  if (hi - lo < 5) { lo -= 2.5; hi += 2.5; }
-  const raw = (hi - lo) / 4, mag = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map((s) => s * mag).find((s) => s >= raw);
-  lo = Math.max(0, Math.floor(lo / step) * step); hi = Math.ceil(hi / step) * step;
-  const x = (ms) => pad.l + (ms - t[0]) / (t.at(-1) - t[0]) * (W - pad.l - pad.r);
-  const y = (val) => pad.t + (hi - val) / (hi - lo) * (H - pad.t - pad.b);
   const r1 = (n) => (n >= 1000 ? Math.round(n).toLocaleString() : fmtNum(Math.round(n * 10) / 10));
-  const grid = [];
-  for (let g = lo; g <= hi + 1e-9; g += step) {
-    grid.push(`<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(g)}" y2="${y(g)}" stroke="var(--grid)" stroke-width="1"/>
-      <text x="${pad.l - 8}" y="${y(g) + 4}" text-anchor="end">${r1(g)}</text>`);
-  }
-  const xLabels = [0, t.length - 1].map((i) =>
-    `<text x="${x(t[i])}" y="${H - 6}" text-anchor="${i === 0 ? "start" : "end"}">${esc(fmtDayKey(points[i].day))}</text>`);
-  const path = t.map((ms, i) => `${i ? "L" : "M"}${x(ms).toFixed(1)},${y(v[i]).toFixed(1)}`).join("");
-  const dots = t.map((ms, i) => `<circle cx="${x(ms)}" cy="${y(v[i])}" r="4" fill="var(--accent)" stroke="var(--bg)" stroke-width="2"/>`).join("");
+  const c = lineChart(points.map((d) => ({ t: new Date(noonOf(d.day)).getTime(), v: d.v })), {
+    W: el.clientWidth || 340, fmtY: r1, xLabel: (i) => esc(fmtDayKey(points[i].day)),
+  });
+  const { W, H, pad, xs, ys } = c;
   el.innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Per-session chart">
-      ${grid.join("")}${xLabels.join("")}
-      <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      ${c.markup}
       <line class="cross" y1="${pad.t}" y2="${H - pad.b}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
-      ${dots}
+      ${chartDots(c)}
       <circle class="focus" r="6" fill="var(--accent)" stroke="var(--text)" stroke-width="2" visibility="hidden"/>
     </svg>
-    <div class="tip" hidden></div>`;
+    <div class="tip" hidden></div>${points.length === 1 ? `<p class="muted small">Log another session to see a trend.</p>` : ""}`;
   const svg = el.querySelector("svg"), cross = el.querySelector(".cross"), focus = el.querySelector(".focus"), tip = el.querySelector(".tip");
   const show = (clientX) => {
     const r = svg.getBoundingClientRect();
     const px = (clientX - r.left) * (W / r.width);
     let i = 0;
-    for (let k = 1; k < t.length; k++) if (Math.abs(x(t[k]) - px) < Math.abs(x(t[i]) - px)) i = k;
-    const cx = x(t[i]), cy = y(v[i]);
+    for (let k = 1; k < xs.length; k++) if (Math.abs(xs[k] - px) < Math.abs(xs[i] - px)) i = k;
+    const cx = xs[i], cy = ys[i];
     cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("visibility", "visible");
     focus.setAttribute("cx", cx); focus.setAttribute("cy", cy); focus.setAttribute("visibility", "visible");
     const d = points[i];

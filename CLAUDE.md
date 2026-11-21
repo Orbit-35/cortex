@@ -26,7 +26,7 @@ A personal software platform: one core (FastAPI + SQLite + login, later) with sm
 - New module = new page + conventions on `entries`, not new tables (unless truly needed).
 - Lifting convention (DESIGN D22–D26): sets are `module=lifting`, `metric=<exercise key>` (e.g. `bench_press`, permanent), `value`=weight as typed, `unit=lb|kg`, `data={"reps", "set", "workout": <workout client_id>}`. Workouts are `metric=_workout`; custom/edited exercises `metric=_exercise` (id `exercise:<key>`); settings `module=settings`. Metrics starting with `_` are never sets.
 - Lifting page code: `static/lifting/` = `app.js` (UI) + pure modules `workouts.js`, `library.js`, `units.js`, `stats.js`, `progress.js` (tested: `node tests/*.test.mjs`).
-- Shared by all pages: colours in `static/core/theme.css` (accent = portfolio pink), confirm dialog + toast in `static/core/ui.js` (DESIGN D45). Destructive or creating actions confirm first.
+- Shared by all pages: colours in `static/core/theme.css` (accent = portfolio pink), confirm dialog + toast in `static/core/ui.js` (DESIGN D45), line chart in `static/core/chart.js` (D50). Destructive or creating actions confirm first.
 - Home launcher at `static/index.html` (`/`). Guitar: `static/guitar/` = `app.js` (tuner UI) + pure `pitch.js` (YIN) and `music.js` (notes, tunings); custom tunings are `module=guitar, metric=_tuning` entries (DESIGN D42–D44).
 - Importers (later): each converts one app's export/API into entries; always set `source` + `external_id`; keep raw files under `raw/` (gitignored).
 
@@ -58,4 +58,3 @@ How to build each one: `docs/research/lifting-queued-ui.md`.
 - Replace every emoji in the UI (🏆 🗑 📌 …) with SVG icons.
 - Exercise ••• opens a small popup menu (Add note, Add cue, Remove exercise), not the big inline grid.
 - Reorder exercises by long-press and drag: the card lifts out, moves up/down with a highlight; remove Move up/down from menus.
-- Charts with a single data point still render (one dot, no trendline).
