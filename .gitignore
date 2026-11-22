@@ -25,3 +25,8 @@ backups/
 # Claude Code personal overrides
 .claude/settings.local.json
 CLAUDE.local.md
+
+# Test kit output
+tests/ui/out/
+node_modules/
+.test-tmp/
