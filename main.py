@@ -21,7 +21,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 BASE_DIR = Path(__file__).parent
 # CORTEX_DB lets tests run against a throwaway database instead of the real one.
@@ -219,7 +219,9 @@ class SyncEntry(EntryBase):
 
 class SyncIn(BaseModel):
     since: int = Field(default=0, ge=0, description="Cursor from the previous sync; 0 = send everything")
-    entries: list[SyncEntry] = Field(default_factory=list, max_length=2000)
+    # Checked one by one in sync(), so one bad entry is rejected alone instead of
+    # failing the whole batch and blocking that device's sync forever (DESIGN D52).
+    entries: list[dict[str, Any]] = Field(default_factory=list, max_length=2000)
 
 
 class SyncOut(BaseModel):
@@ -242,14 +244,24 @@ def sync(body: SyncIn):
     twice (e.g. the reply got lost) changes nothing the second time.
     """
     rejected: list[str] = []
+    valid: list[SyncEntry] = []
+    for raw in body.entries:
+        try:
+            valid.append(SyncEntry.model_validate(raw))
+        except ValidationError:
+            rejected.append(str(raw.get("client_id", "")))
+    losers: list[str] = []  # older edits we ignored: the sender gets our version back
     with write_tx() as conn:
         rev = next_rev(conn)
-        for e in body.entries:
+        for e in valid:
             existing = conn.execute(
                 "SELECT updated_at FROM entries WHERE client_id = ?", (e.client_id,)
             ).fetchone()
             if existing and e.updated_at <= existing["updated_at"]:
-                continue  # a retry, or an older edit than the one we have: last write wins
+                # A retry (same time), or an older edit than ours: last write wins.
+                if e.updated_at < existing["updated_at"]:
+                    losers.append(e.client_id)
+                continue
             fields = (e.module, e.metric, e.value, e.unit, json.dumps(e.data), e.recorded_at,
                       e.source, e.external_id, e.updated_at, e.deleted_at, rev)
             try:
@@ -278,6 +290,11 @@ def sync(body: SyncIn):
         rows = conn.execute(
             "SELECT * FROM entries WHERE rev > ? ORDER BY rev", (since,)
         ).fetchall()
+        sent = {r["client_id"] for r in rows}
+        for cid in losers:
+            if cid not in sent:
+                rows.append(conn.execute("SELECT * FROM entries WHERE client_id = ?", (cid,)).fetchone())
+                sent.add(cid)
     return SyncOut(cursor=cursor, entries=[row_to_entry(r) for r in rows], rejected=rejected)
 
 

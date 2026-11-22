@@ -67,7 +67,11 @@ function renderTunings() {
   $("tunname").textContent = tuning.name;
 }
 
+// Lowest pitch to listen for: a bit under the tuning's lowest string, so bass tunings work.
+// Guitar tunings keep the usual 60 Hz floor (a lower floor costs more work per frame).
+let lowFreq = 60;
 function setTuning(t) {
+  lowFreq = Math.min(60, ...t.notes.map((n) => 0.8 * midiToFreq(parseNote(n), 440)));
   tuning = t;
   pref.set("tuning", t.id);
   locked = current = null;
@@ -144,7 +148,8 @@ function tickLoop() {
   const now = performance.now();
   if (now < muteUntil) return; // ignore our own reference tone
   analyser.getFloatTimeDomainData(buf);
-  const r = detectPitch(buf, ctx.sampleRate);
+  // Guitar tunings only look at the newest 4096 samples; bass needs the whole buffer.
+  const r = detectPitch(lowFreq < 60 ? buf : buf.subarray(buf.length - 4096), ctx.sampleRate, { minFreq: lowFreq });
   if (r && r.clarity > 0.85) {
     // A jump of more than ~half a semitone means a new note: start the median over.
     if (recent.length && Math.abs(centsOff(r.freq, median(recent))) > 60) recent = [];
@@ -202,7 +207,7 @@ async function openMic() {
   $("micmsg").hidden = true;
   ctx = ctx && ctx.state !== "closed" ? ctx : new AudioContext();
   analyser = ctx.createAnalyser();
-  analyser.fftSize = 4096; // ~85 ms of sound: enough cycles of the low E (82 Hz)
+  analyser.fftSize = 8192; // ~170 ms: enough cycles of a bass B0 (31 Hz); guitar uses the newest half
   buf = new Float32Array(analyser.fftSize);
   ctx.createMediaStreamSource(stream).connect(analyser);
   // Browsers may keep audio paused until the first tap on the page; then one tap anywhere starts it.

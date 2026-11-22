@@ -54,4 +54,11 @@ let seed = 1;
 const noise = new Float32Array(4096).map(() => ((seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5) * 0.5);
 assert.equal(detectPitch(noise, SR), null);
 
+// Bass strings: below the 60 Hz default, heard when the floor is lowered (bug audit M5).
+for (const f of [41.2, 55, 30.9]) {
+  assert.equal(detectPitch(tone(f, 4096), SR), null, `${f} Hz is ignored by default`);
+  const r = detectPitch(tone(f, 8192), SR, { minFreq: 0.8 * f });
+  assert.ok(r && Math.abs(centsOff(r.freq, f)) < 5, `${f} Hz heard with a lower floor: ${r?.freq}`);
+}
+
 console.log("guitar tests passed");

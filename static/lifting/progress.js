@@ -1,7 +1,7 @@
 // Progress overview maths: pure functions, no DOM (tested by tests/progress.test.mjs).
 // Weights in and out are kg; the page converts for display.
 
-import { prKind } from "./stats.js";
+import { prKind, byTime } from "./stats.js";
 import { toKg } from "./units.js";
 
 // The radar chart and split use six broad groups; exercises are tagged with finer muscles.
@@ -42,7 +42,7 @@ export function prEvents(sets) {
   }
   const events = new Map();
   for (const list of byKey.values()) {
-    list.sort((a, b) => (a.recorded_at < b.recorded_at ? -1 : a.recorded_at > b.recorded_at ? 1 : 0));
+    list.sort(byTime);
     for (let i = 1; i < list.length; i++) {
       const kind = prKind(list[i], list.slice(0, i));
       if (kind) events.set(list[i].client_id, kind);

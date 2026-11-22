@@ -10,6 +10,7 @@
 const DB_NAME = "cortex";
 const DB_VERSION = 1;
 const SYNC_TIMEOUT_MS = 10000;
+const SYNC_BATCH = 500; // outbox entries per request (the server takes at most 2000)
 const RETRY_MS = 20000;
 
 let apiBase = ""; // "" = same origin. Native shells set a full URL via configure().
@@ -78,6 +79,12 @@ function uuid() {
 }
 
 const nowIso = () => new Date().toISOString();
+// An edit's time is always later than the version it replaces, even if this device's clock
+// is behind the one that wrote it, so the edit wins last-write-wins (DESIGN D52).
+const stamp = (prev) => {
+  const now = Date.now(), before = prev ? Date.parse(prev) : NaN;
+  return new Date(before >= now ? before + 1 : now).toISOString();
+};
 
 // ---------- Writes: local first, then outbox ----------
 
@@ -110,7 +117,7 @@ export async function putEntries(list) {
     client_id: e.client_id || uuid(), module: e.module, metric: e.metric,
     value: e.value ?? null, unit: e.unit ?? null, data: e.data ?? {},
     recorded_at: e.recorded_at || now, source: e.source ?? "manual",
-    external_id: e.external_id ?? null, deleted_at: e.deleted_at ?? null, updated_at: now,
+    external_id: e.external_id ?? null, deleted_at: e.deleted_at ?? null, updated_at: stamp(e.updated_at),
   }));
   if (!rows.length) return rows;
   await tx(["entries", "outbox"], "readwrite", (t) => {
@@ -129,7 +136,7 @@ export async function deleteEntry(clientId) {
   const db = await openDb();
   const entry = await done(db.transaction("entries").objectStore("entries").get(clientId));
   if (!entry || entry.deleted_at) return;
-  const now = nowIso();
+  const now = stamp(entry.updated_at);
   await saveLocal({ ...entry, updated_at: now, deleted_at: now });
 }
 
@@ -176,7 +183,7 @@ function changed() {
 export function sync() {
   if (syncing) { syncAgain = true; return syncing; }
   syncing = syncOnce()
-    .then(() => true, (err) => { console.debug("Cortex sync failed:", err.message); return false; })
+    .then((more) => { if (more) syncAgain = true; return true; }, (err) => { console.debug("Cortex sync failed:", err.message); return false; })
     .then((ok) => {
       lastSyncOk = ok;
       syncing = null;
@@ -191,11 +198,13 @@ export function sync() {
 async function syncOnce() {
   const db = await openDb();
   const read = db.transaction(["outbox", "meta"]);
-  const [batch, cursor] = await Promise.all([
-    done(read.objectStore("outbox").getAll()),
+  const [queued, cursor] = await Promise.all([
+    done(read.objectStore("outbox").getAll(null, SYNC_BATCH + 1)),
     done(read.objectStore("meta").get("cursor")),
   ]);
 
+  // A big outbox goes up in parts; sync() runs again straight away for the rest.
+  const batch = queued.slice(0, SYNC_BATCH), more = queued.length > SYNC_BATCH;
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), SYNC_TIMEOUT_MS);
   let reply;
@@ -238,6 +247,7 @@ async function syncOnce() {
       t.objectStore("meta").put(reply.cursor, "cursor");
     };
   });
+  return more;
 }
 
 // Sync on start, when the connection returns, when the app comes back to the

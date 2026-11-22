@@ -72,7 +72,7 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Why:** the original idea was "changes since my last sync time", but device clocks disagree, and a change stamped slightly in the past would be silently skipped forever. A counter issued by one authority, inside a write lock (`BEGIN IMMEDIATE`), has no such gap.
 - **Trade-off:** one extra column. If the server database is replaced and a device's cursor is ahead of it, the server resends everything (handled), but entries that device had already synced are not re-uploaded automatically.
 
-### D9. Conflicts: last write wins, by `updated_at`
+### D9. Conflicts: last write wins, by `updated_at` (clock skew handled by D52)
 - **Decision:** when the server already has an entry, an incoming version replaces it only if its `updated_at` is strictly newer. Equal or older is ignored.
 - **Why:** simplest rule that is predictable, and "equal is ignored" is what makes retries harmless.
 - **Trade-off:** `updated_at` comes from device clocks, so a device with a badly wrong clock could win or lose an edit unfairly. Acceptable while entries are effectively write-once; revisit if entries become heavily edited.
@@ -281,6 +281,16 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Decision:** every icon is an inline SVG from `static/core/icons.js` (path data copied unchanged from Lucide 1.77.0, licence notice at the top), drawn with the shared `.ic` rule in `core/theme.css` so it takes the text colour. Emoji in the lifting UI (trophy, bin, pin, note, chain, arrows, tick, milestone objects) were replaced. Toasts stay plain text. `tests/icons.test.mjs` fails if an emoji or arrow symbol appears in `static/` outside a code comment.
 - **Why:** the owner dislikes emoji; they render differently on every phone, can't follow the pink theme, and look out of place in the native app. Lucide matches the existing tab-bar icons (24 px grid, stroke 2, round ends) and its ISC licence is fine for a public repo.
 - **Trade-off:** milestone objects without a Lucide picture use the nearest one (paw print for horse and elephant, fish for whales, bone for T. rex). New icons must be copied in from lucide-static, never drawn from memory.
+
+### D52. Sync never gets stuck, and devices can't drift apart
+- **Decision:**
+  - The server checks each pushed entry on its own. A bad one goes into `rejected` and the rest are saved, instead of the whole batch failing with a 422.
+  - When the server ignores an older edit (D9), it sends its own newer version back, so the sender overwrites its local copy. Before, the sender kept its losing version forever.
+  - An edit or delete is stamped at least 1 ms later than the version it replaces (`stamp()` in `core/cortex.js`), so an edit made on a device whose clock is behind still wins.
+  - The outbox goes up 500 entries per request (the server takes at most 2000); `sync()` runs again straight away for the rest.
+  - The lifting page starts auto-sync even if drawing the page fails, and a date field ignores half-typed or future years, which the server would reject.
+- **Why:** the bug audit found that one bad entry, or an outbox over 2000, blocked a device's sync forever with only "N pending" showing, and that a device with a slow clock could have its edits silently dropped while it still showed them.
+- **Trade-off:** rejected entries are dropped from the outbox with a console warning only; a visible "sync error" note can come later. Pulls still aren't paged (a fresh device on a very large database downloads everything in one reply).
 
 ## Security and hosting
 

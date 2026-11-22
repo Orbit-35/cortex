@@ -356,7 +356,7 @@ function renderEditor() {
       html += `<div class="swipe" data-s="${si}">
         <button class="trash" data-act="delset" aria-label="Delete set" tabindex="-1">${icon("trash-2")}</button>
         <div class="grid setrow ${live ? "live" : "edit"}${r.done && live ? " done" : ""}">
-          <button class="setno t-${r.type || "normal"}" data-act="setmenu" aria-label="Set ${label} options${r.pr ? ", personal record" : ""}">${r.pr ? icon("trophy") : label}${r.rpe != null ? `<small>@${r.rpe}</small>` : ""}</button>
+          <button class="setno t-${r.type || "normal"}" data-act="setmenu" aria-label="Set ${label} options${r.pr ? ", personal record" : ""}">${r.pr ? icon("trophy") : label}${r.rpe != null ? `<small>@${esc(r.rpe)}</small>` : ""}</button>
           <button class="prev" data-act="useprev" ${p ? "" : "disabled"}>${p ? esc(setText(p)) : "—"}</button>
           <input data-f="weight" inputmode="decimal" value="${esc(r.weight)}" placeholder="${esc(hint.weight)}" aria-label="Weight">
           <input data-f="reps" inputmode="numeric" value="${esc(r.reps)}" placeholder="${esc(hint.reps)}" aria-label="Reps">
@@ -368,7 +368,7 @@ function renderEditor() {
           <div class="small"><b>Set type</b></div>
           <div class="chips wrapchips">${[[null, "Normal"], ...Object.entries(SET_TYPES).map(([k, v]) => [k, v[1]])].map(([k, label]) =>
             `<button class="chip${(r.type || null) === k ? " on" : ""}" data-act="settype" data-v="${k || ""}">${label}</button>`).join("")}</div>
-          <div class="small" style="margin-top:8px"><b>Effort (RPE)</b> <span class="muted">· ${r.rpe != null ? `${r.rpe}: ${RPE_TEXT[r.rpe]}` : "how many more reps could you have done?"}</span></div>
+          <div class="small" style="margin-top:8px"><b>Effort (RPE)</b> <span class="muted">· ${r.rpe != null ? `${esc(r.rpe)}: ${esc(RPE_TEXT[r.rpe] ?? "")}` : "how many more reps could you have done?"}</span></div>
           <div class="chips wrapchips">${RPES.map((v) => `<button class="chip${r.rpe === v ? " on" : ""}" data-act="rpe" data-v="${v}">${v}</button>`).join("")}
             ${r.rpe != null ? `<button class="chip" data-act="rpe" data-v="">Clear</button>` : ""}</div>
           <div class="ex-menu">
@@ -406,6 +406,7 @@ $("editor").addEventListener("input", (ev) => {
     if (!el.value) return;
     const old = new Date(d.start);
     const [y, mo, day] = el.value.split("-").map(Number);
+    if (!(y >= 1970) || el.value > todayKey()) return; // a half-typed or future year never gets saved (it would block syncing)
     d.start = new Date(y, mo - 1, day, old.getHours(), old.getMinutes()).toISOString();
   } else if (f === "dur_h" || f === "dur_m") {
     const hv = $("editor").querySelector('[data-f="dur_h"]').value.trim();
@@ -852,7 +853,7 @@ function renderExerciseInto(el, key) {
     <table>
       <thead><tr><th>Reps</th><th class="r">Heaviest</th><th class="r">Est. 1RM</th><th class="r">Date</th></tr></thead>
       <tbody>${reps.map((r) => `<tr>
-        <td>${r.reps}</td><td class="r">${fmtW(r.weight)} ${unit}</td>
+        <td>${esc(r.reps)}</td><td class="r">${fmtW(r.weight)} ${unit}</td>
         <td class="r">${fmtW(r.e1rm)}</td><td class="r">${esc(fmtDayKey(dayKey(r.recorded_at)))}</td>
       </tr>`).join("")}</tbody>
     </table>` : ""}
@@ -962,6 +963,9 @@ function allExercises() {
 }
 
 function renderExercises() {
+  // A redraw (typing, or a background sync) keeps the search box focused, so the keyboard stays up.
+  const old = $("exsearch");
+  const typing = old && document.activeElement === old ? [old.selectionStart, old.selectionEnd] : null;
   const counts = new Map();
   for (const s of sets) counts.set(s.metric, (counts.get(s.metric) || 0) + 1);
   const q = exQuery.trim().toLowerCase();
@@ -990,14 +994,8 @@ function renderExercises() {
   if (hiddenCount) html += `<div style="margin-top:18px"><button class="ghost" data-act="hidden">${showHidden ? "Hide" : "Show"} hidden exercises (${hiddenCount})</button></div>`;
   $("view-exercises").innerHTML = html;
   const input = $("exsearch");
-  input.addEventListener("input", () => {
-    exQuery = input.value;
-    const pos = input.selectionStart;
-    renderExercises();
-    const again = $("exsearch");
-    again.focus();
-    again.setSelectionRange(pos, pos);
-  });
+  if (typing) { input.focus(); input.setSelectionRange(...typing); }
+  input.addEventListener("input", () => { exQuery = input.value; renderExercises(); });
 }
 
 $("view-exercises").addEventListener("click", (ev) => {
@@ -1189,7 +1187,7 @@ async function refresh() {
   workSets = sets.filter(isWorking);
   workouts = groupWorkouts(entries);
   lib = resolveExercises(entries.filter((e) => e.metric === EXERCISE));
-  prs = prEvents(workSets);
+  try { prs = prEvents(workSets); } catch (err) { console.error("PR maths failed:", err); prs = new Map(); }
   if (!editor) render();
   if (!$("picker").hidden) renderPicker();
   if (!$("exsheet").hidden && exsheetKey) {
@@ -1209,7 +1207,8 @@ setInterval(() => {
 cortex.onChange(refresh);
 if (history.state?.ui) history.replaceState(null, "", location.hash); // a reload closes any open editor
 showTab((location.hash || "#log").slice(1));
-refresh().then(() => cortex.startAutoSync());
+// Sync starts even if drawing fails, so the outbox never gets stuck on the device.
+refresh().catch((err) => console.error("refresh failed:", err)).finally(() => cortex.startAutoSync());
 
 // The service worker keeps the app shell on the device so this page opens offline.
 // When a new version is installed (DESIGN D36) the page reloads itself into it, unless

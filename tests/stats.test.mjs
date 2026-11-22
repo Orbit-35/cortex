@@ -40,3 +40,20 @@ const series = sessionSeries(sets);
 assert.deepEqual(series.map((d) => [d.heaviest, d.volume, d.sets]), [[70, 830, 2], [80, 465, 2], [85, 85, 1]]);
 assert.equal(series[0].best.weight, 70);
 console.log("sessionSeries: ok");
+
+// Bodyweight sets (no weight) before a weighted one: no crash, and no PR (bug audit H1).
+{
+  const prev = [E(null, 10, t(1, 9)), E(0, 8, t(2, 9))];
+  assert.equal(prKind(E(10, 8, t(3, 9)), prev), null);
+}
+
+// Sets saved together share one time; PRs come out the same in any storage order (bug audit M4).
+{
+  const { prEvents } = await import("../static/lifting/progress.js");
+  const S = (id, w, set, when, workout = "w2") => ({ client_id: id, metric: "bench_press", value: w, unit: "kg", recorded_at: when, data: { reps: 5, set, workout } });
+  const old = S("s0", 90, 1, t(1, 9), "w1"), a = S("s1", 100, 1, t(5, 9)), b = S("s2", 110, 2, t(5, 9));
+  const one = [...prEvents([old, a, b]).keys()], two = [...prEvents([old, b, a]).keys()];
+  assert.deepEqual(one, two);
+  assert.deepEqual(one.sort(), ["s1", "s2"]);
+}
+console.log("PR edge cases: ok");

@@ -18,6 +18,12 @@ export function dayKey(iso) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+// Oldest first. Sets saved together share one time, so ties go by workout, then set number,
+// so every device counts the same PRs.
+export const byTime = (a, b) =>
+  (a.recorded_at < b.recorded_at ? -1 : a.recorded_at > b.recorded_at ? 1
+    : String(a.data?.workout ?? "").localeCompare(String(b.data?.workout ?? "")) || (a.data?.set ?? 0) - (b.data?.set ?? 0));
+
 const setOf = (e) => {
   const kg = toKg(e.value, e.unit);
   return { weight: kg, reps: e.data?.reps, e1rm: e1rm(kg, e.data?.reps), recorded_at: e.recorded_at };
@@ -41,7 +47,7 @@ export function bestPerDay(entries) {
 export function personalRecords(entries) {
   const byReps = new Map();
   let best = null;
-  const sorted = [...entries].sort((a, b) => (a.recorded_at < b.recorded_at ? -1 : 1));
+  const sorted = [...entries].sort(byTime);
   for (const e of sorted) {
     const s = setOf(e);
     if (!s.e1rm) continue;
@@ -59,6 +65,7 @@ export function prKind(newSet, previous) {
   const s = setOf(newSet);
   if (!s.e1rm || previous.length === 0) return null;
   const { best, reps } = personalRecords(previous);
+  if (!best) return null; // only no-weight sets before: the first weighted set isn't a PR
   if (s.e1rm > best.e1rm) return "e1rm";
   const atReps = reps.find((r) => r.reps === s.reps);
   if (!atReps || s.weight > atReps.weight) return "reps";
