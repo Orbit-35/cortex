@@ -307,6 +307,11 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Why:** a phone-sized review with screenshots found small targets (28 px rows), a toast over the editor, an empty-state flash, an update that never loaded, and other rough edges.
 - **Trade-off:** none of these change how the apps work. The shared header for all apps (same place for "All apps", same title size) is a bigger layout change, so it waits for the owner's say.
 
+### D54. One top bar for every app
+- **Decision:** home, Lifting and the tuner share `.cx-top` from `core/theme.css`: the "All apps" button on the left (Lucide `layout-grid`), then a 24 px title, then a right-hand slot (Lifting: sync pill and settings; tuner: tuning button). Home has the same bar with no apps button. In Lifting the settings button keeps its place while hidden, so the bar doesn't shift between tabs.
+- **Why:** the UI review found "All apps" on the left in the tuner but on the right in Lifting, and titles of 28, 26 and 22 px. One bar means the way back home is always in the same place.
+- **Trade-off:** the Lifting sync pill sits a little further right on tabs other than Profile, where the hidden settings button keeps its space.
+
 ## Security and hosting
 
 ### D16. No auth yet; tailnet only

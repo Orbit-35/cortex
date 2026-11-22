@@ -27,3 +27,16 @@
   .cx-anim-up, .cx-ask-box { animation: cx-up .18s ease-out; }
   .cx-anim-fade { animation: cx-fade .18s ease-out; }
 }
+
+/* One top bar for every app (DESIGN D54): "All apps" on the left, a 24 px title, then a
+   right-hand slot (sync pill, settings, tuning). Home uses it with no apps button. */
+.cx-top { position: sticky; top: 0; z-index: 5; background: var(--bg); display: flex; align-items: center; gap: 8px;
+  min-height: 60px; padding: calc(8px + env(safe-area-inset-top)) 0 8px; }
+.cx-top h1 { flex: 1; min-width: 0; margin: 0; font-size: 24px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cx-top .cx-right { flex: none; display: flex; align-items: center; gap: 4px; }
+.cx-iconbtn { flex: none; width: 44px; height: 44px; display: grid; place-items: center; background: none; border: 0;
+  border-radius: 12px; color: var(--text); text-decoration: none; }
+.cx-iconbtn:active { background: var(--card); }
+.cx-iconbtn .ic { width: 24px; height: 24px; vertical-align: 0; }
+.cx-apps { margin-left: -10px; } /* the icon, not the tap area, lines up with the page edge */
+.cx-right > .cx-iconbtn:last-child { margin-right: -10px; } /* same on the right edge */

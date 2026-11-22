@@ -44,12 +44,6 @@
   :root:has(.sheet:not([hidden])) { --toast-bottom: 24px; }
   .sheet.cx-anim-up { animation-name: cx-slide; } /* full-screen: slide only, no see-through fade */
   .wrap { max-width: 560px; margin-inline: auto; padding: 0 16px; }
-  .top {
-    position: sticky; top: 0; z-index: 5; background: var(--bg);
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    padding: calc(12px + env(safe-area-inset-top)) 0 10px;
-  }
-  .top h1 { font-size: 26px; margin: 0; }
   main { padding-bottom: calc(var(--nav-h) + 24px + env(safe-area-inset-bottom)); }
   .sync { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
   .sync::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
@@ -147,9 +141,8 @@
   .rowbtn > .val { white-space: nowrap; text-align: right; }
   .ghost.accent { color: var(--accent); font-weight: 600; }
   .list .sub { display: block; line-height: 1.35; margin-top: 2px; }
-  .topright { display: flex; align-items: center; gap: 8px; }
-  .gear { background: none; border: 0; width: 44px; height: 44px; display: grid; place-items: center; color: var(--text); }
-  .gear svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  #gear[hidden] { display: grid !important; visibility: hidden; } /* keeps its place, so the bar doesn't shift between tabs */
+  .cx-right .sync { margin-right: 4px; }
   .ex-menu { display: flex; gap: 8px; margin: 6px 0; }
   .ex-menu button { flex: 1; }
   .ex textarea { margin: 6px 0; }
@@ -290,14 +283,14 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="top">
+  <header class="cx-top">
+    <a class="cx-iconbtn cx-apps" href="/" aria-label="All apps"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg></a>
     <h1 id="title">Log</h1>
-    <div class="topright">
-      <a class="gear" href="/" aria-label="All apps"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg></a>
+    <div class="cx-right">
       <div class="sync" id="sync" role="status">…</div>
-      <button class="gear" id="gear" aria-label="Settings" hidden></button>
+      <button class="cx-iconbtn" id="gear" aria-label="Settings" hidden></button>
     </div>
-  </div>
+  </header>
 
   <main id="view-log"></main>
   <main id="view-progress" hidden></main>
