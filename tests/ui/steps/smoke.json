@@ -1,0 +1,22 @@
+{
+  "url": "/lifting/",
+  "device": "phone",
+  "seed": "two-workouts",
+  "steps": [
+    { "wait": ".wcard" },
+    { "shot": "smoke-log" },
+    { "audit": "log", "expect": [] },
+    { "click": "nav.tabbar [data-tab=progress]" },
+    { "wait": "#view-progress h2" },
+    { "shot": "smoke-progress" },
+    { "click": "nav.tabbar [data-tab=exercises]" },
+    { "type": ["#exsearch", "bench"] },
+    { "shot": "smoke-exercises" },
+    { "click": "nav.tabbar [data-tab=profile]" },
+    { "click": "#gear" },
+    { "wait": "#settings .seg" },
+    { "shot": "smoke-settings" },
+    { "back": true },
+    { "cortex": ["getStatus"], "expect": { "pending": 0 } }
+  ]
+}

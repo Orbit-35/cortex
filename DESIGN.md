@@ -312,6 +312,16 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Why:** the UI review found "All apps" on the left in the tuner but on the right in Lifting, and titles of 28, 26 and 22 px. One bar means the way back home is always in the same place.
 - **Trade-off:** the Lifting sync pill sits a little further right on tabs other than Profile, where the hidden settings button keeps its space.
 
+### D55. Automated tests: Node + headless Edge, no dependencies, always a throwaway server
+- **Decision:** one command, `node tests/run.mjs` (`npm test`), runs three groups:
+  - **unit:** the pure-module tests plus `static-guards.test.mjs`, which fails if a page fetches `/api` itself, if a file a page loads is missing from the `sw.js` SHELL, or if `core/cortex.js` gains DOM code.
+  - **api:** `/api/sync` and the REST endpoints over real HTTP.
+  - **ui:** headless Edge (or Chrome) driven over the DevTools protocol (`tests/ui/lib/`), on a phone-sized touch screen. Each "device" is its own browser context, so two devices can sync through one server. A fake microphone feeds the tuner a tone. Tests read local storage by importing `/core/cortex.js` inside the page, so app code has no test hooks.
+  - `tests/lib/server.mjs` starts every server in a new temp folder with its own database and backups, on a random port bound to 127.0.0.1. It refuses port 8000 and the real `cortex.db`. The runner also warns if `cortex.db` changed during a run.
+  - `tests/ui/run-steps.mjs` runs JSON step files for quick visual checks, and `tests/AGENT.md` is the prompt for test subagents. Screenshots go to `tests/ui/out/` (gitignored).
+- **Why:** test agents were writing a new scratch driver for every change. A committed kit is faster, checks the same things every time, and can't touch the owner's data by mistake. Node 24 has WebSocket, fetch and a test runner built in, and the Python venv has no test packages, so nothing needs installing.
+- **Trade-off:** Chromium only, and a headless browser can't prove real-phone behaviour (keyboard, haptics, a real mic, installing). Those stay on the owner's phone checklist. UI tests take about a minute.
+
 ## Security and hosting
 
 ### D16. No auth yet; tailnet only

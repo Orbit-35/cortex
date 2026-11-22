@@ -25,10 +25,13 @@ A personal software platform: one core (FastAPI + SQLite + login, later) with sm
 - One generic `entries` table: `module, metric, value, unit, data (JSON), recorded_at (ISO-8601), source, external_id`, plus sync columns `client_id, updated_at, deleted_at, rev`, with `UNIQUE(source, external_id)` so re-imports never duplicate.
 - New module = new page + conventions on `entries`, not new tables (unless truly needed).
 - Lifting convention (DESIGN D22–D26): sets are `module=lifting`, `metric=<exercise key>` (e.g. `bench_press`, permanent), `value`=weight as typed, `unit=lb|kg`, `data={"reps", "set", "workout": <workout client_id>}`. Workouts are `metric=_workout`; custom/edited exercises `metric=_exercise` (id `exercise:<key>`); settings `module=settings`. Metrics starting with `_` are never sets.
-- Lifting page code: `static/lifting/` = `app.js` (UI) + pure modules `workouts.js`, `library.js`, `units.js`, `stats.js`, `progress.js` (tested: `node tests/*.test.mjs`).
+- Lifting page code: `static/lifting/` = `app.js` (UI) + pure modules `workouts.js`, `library.js`, `units.js`, `stats.js`, `progress.js` (tested: `node tests/run.mjs`).
 - Shared by all pages: colours in `static/core/theme.css` (accent = portfolio pink), confirm dialog + toast in `static/core/ui.js` (DESIGN D45), line chart in `static/core/chart.js` (D50), icons in `static/core/icons.js` (Lucide, no emoji: D51). Destructive or creating actions confirm first.
 - Home launcher at `static/index.html` (`/`). Guitar: `static/guitar/` = `app.js` (tuner UI) + pure `pitch.js` (YIN) and `music.js` (notes, tunings); custom tunings are `module=guitar, metric=_tuning` entries (DESIGN D42–D44).
 - Importers (later): each converts one app's export/API into entries; always set `source` + `external_id`; keep raw files under `raw/` (gitignored).
+
+## Testing
+`node tests/run.mjs` (or `npm.cmd test` in PowerShell) runs unit, API and headless-browser tests on throwaway servers (DESIGN D55). Test subagents use the prompt in `tests/AGENT.md`. Never test against port 8000 or the real `cortex.db`.
 
 ## Running
 ```powershell

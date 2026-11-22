@@ -22,14 +22,14 @@ This is a plan, not a decision log. Each step adds its DESIGN.md entry in the co
 ## Order
 Effort: S = under an hour or two, M = about half a day, L = a day or more.
 
-### Stage 0: test kit (M). First, because every later step uses it.
+### Stage 0: test kit (M). Done (DESIGN D55).
 - Add `package.json`, `tests/run.mjs`, and the headless Edge driver (no npm packages).
 - Add the throwaway-server helper. It refuses port 8000 and the real `cortex.db`.
 - Add API tests for `/api/sync`, plus static checks (every file is in the `sw.js` SHELL, no stray `/api` fetches).
 - Write the first UI tests: home, logging a workout, offline, two devices syncing, the tuner with a fake mic.
 - Write `tests/AGENT.md`, the prompt for test subagents.
 
-### Stage 1: lifting quick wins (S–M each). These can run while the owner installs Android Studio.
+### Stage 1: lifting quick wins (S–M each). Done (DESIGN D49–D51).
 1. No text selection on long-press.
 2. Deleting a set no longer asks.
 3. Shared chart in `core/chart.js`; a chart with one session shows a dot.
