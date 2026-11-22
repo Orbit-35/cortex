@@ -22,10 +22,6 @@
   svg.i { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
   .wrap { max-width: 520px; margin-inline: auto; padding: 0 16px calc(24px + env(safe-area-inset-bottom)); min-height: 100dvh; display: flex; flex-direction: column; }
-  .top { display: flex; align-items: center; gap: 8px; padding: calc(10px + env(safe-area-inset-top)) 0 6px; }
-  .top h1 { font-size: 22px; margin: 0; flex: 1; }
-  .iconbtn { background: none; border: 0; width: 44px; height: 44px; display: grid; place-items: center; color: var(--text); border-radius: 12px; text-decoration: none; }
-  .iconbtn:active { background: var(--card); }
 
   .tunbtn { display: flex; align-items: center; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 999px;
     padding: 0 10px 0 16px; min-height: 44px; font-size: 15px; font-weight: 600; max-width: 55%; }
@@ -111,14 +107,14 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="top">
-    <a class="iconbtn" href="/" aria-label="All apps"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg></a>
+  <header class="cx-top">
+    <a class="cx-iconbtn cx-apps" href="/" aria-label="All apps"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg></a>
     <h1>Tuner</h1>
     <button class="tunbtn" id="tunbtn" aria-haspopup="dialog">
       <span id="tunname">Standard</span>
       <svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
     </button>
-  </div>
+  </header>
 
   <div class="stage state-idle" id="stage">
     <svg class="gauge" viewBox="0 0 380 215" aria-hidden="true" id="gauge"></svg>
