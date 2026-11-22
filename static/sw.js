@@ -63,9 +63,11 @@ self.addEventListener("fetch", (event) => {
     try {
       return await fetch(request);
     } catch (err) {
-      // Offline and not cached. The home URL redirects to lifting; mirror that.
+      // Offline and not cached (e.g. "/guitar" without the slash): open that app's page,
+      // or the home launcher if there's no such app.
       if (request.mode === "navigate") {
-        const shell = await caches.match("/lifting/", { cacheName: CACHE });
+        const app = `/${url.pathname.split("/")[1]}/`;
+        const shell = (await caches.match(app, { cacheName: CACHE })) || (await caches.match("/", { cacheName: CACHE }));
         if (shell) return shell;
       }
       throw err;

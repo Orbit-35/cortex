@@ -68,7 +68,7 @@
     width: 100%; min-height: 56px; border: 0; border-radius: 14px; background: var(--accent);
     color: var(--on-accent); font-size: 18px; font-weight: 700;
   }
-  .primary.sm { width: auto; min-height: 40px; padding: 0 18px; font-size: 16px; border-radius: 10px; }
+  .primary.sm { width: auto; min-height: 44px; padding: 0 18px; font-size: 16px; border-radius: 10px; }
   .secondary {
     width: 100%; min-height: 48px; border: 1px solid var(--line); border-radius: 14px;
     background: var(--card); font-size: 16px; font-weight: 600;
@@ -81,11 +81,12 @@
   h2 { font-size: 15px; color: var(--muted); margin: 28px 0 8px; font-weight: 600; }
   .empty { color: var(--muted); font-size: 15px; padding: 24px 0; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
-  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; scrollbar-width: none; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 16px; margin-inline: -16px; scroll-padding-inline: 16px; scrollbar-width: none; }
+  .wrapchips { margin-inline: 0; padding-inline: 0; }
   .chips::-webkit-scrollbar { display: none; }
   .chip {
     flex: none; font-size: 15px; background: var(--card); border: 1px solid var(--line);
-    border-radius: 999px; padding: 8px 14px; min-height: 40px;
+    border-radius: 999px; padding: 8px 14px; min-height: 44px;
   }
   .chip.on { border-color: var(--accent); color: var(--accent); }
 
@@ -96,6 +97,7 @@
   .wcard { width: 100%; text-align: left; display: block; }
   .wcard + .wcard { margin-top: 10px; }
   .wcard .head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .wcard .head .small { white-space: nowrap; }
   .wcard .name { font-weight: 700; }
   .wcard .lines { margin-top: 8px; font-size: 15px; }
   .wcard .line { display: flex; justify-content: space-between; gap: 8px; }
@@ -134,7 +136,12 @@
   .hist .head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
   .hist .line { display: flex; justify-content: space-between; padding: 3px 0; font-variant-numeric: tabular-nums; }
   .hist .notes { font-size: 14px; color: var(--muted); white-space: pre-wrap; margin-bottom: 6px; }
-  .rowbtn { width: 100%; display: flex; justify-content: space-between; gap: 12px; background: none; border: 0; padding: 0; text-align: left; min-height: 28px; }
+  .rowbtn { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; background: none; border: 0; padding: 12px 0; text-align: left; min-height: 52px; }
+  .list li:has(> .rowbtn) { padding: 0; }
+  .rowbtn > span:first-child { min-width: 0; }
+  .rowbtn > .val { white-space: nowrap; text-align: right; }
+  .ghost.accent { color: var(--accent); font-weight: 600; }
+  .list .sub { display: block; line-height: 1.35; margin-top: 2px; }
   .topright { display: flex; align-items: center; gap: 8px; }
   .gear { background: none; border: 0; width: 44px; height: 44px; display: grid; place-items: center; color: var(--text); }
   .gear svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -142,8 +149,8 @@
   .ex-menu button { flex: 1; }
   .ex textarea { margin: 6px 0; }
   .grid { display: grid; gap: 6px; align-items: center; }
-  .grid.live { grid-template-columns: 34px minmax(0, 1fr) 78px 62px 48px; }
-  .grid.edit { grid-template-columns: 34px minmax(0, 1fr) 78px 62px; }
+  .grid.live { grid-template-columns: 40px minmax(0, 1fr) 74px 60px 46px; }
+  .grid.edit { grid-template-columns: 40px minmax(0, 1fr) 78px 62px; }
   .ghead { font-size: 12px; color: var(--muted); font-weight: 600; text-align: center; padding: 8px 0 2px; }
   .ghead.l { text-align: left; }
   .setrow { padding: 3px 0; border-radius: 10px; }
@@ -236,10 +243,11 @@
   .lbl input { margin-top: 6px; color: var(--text); font-size: 18px; }
 
   /* Workout editor: menus, cues, supersets, set types, swipe-to-delete */
+  .dots { min-width: 44px; }
   .dots.on { color: var(--accent); }
   .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 10px; }
   .menu-grid .secondary { min-height: 44px; font-size: 15px; }
-  .secondary[disabled] { opacity: .4; }
+  .secondary[disabled] { opacity: .55; }
   .cue { display: block; width: 100%; text-align: left; background: rgb(245 165 36 / .12); border: 0; border-left: 3px solid var(--warn);
     border-radius: 8px; padding: 8px 10px; margin: 2px 0 8px; font-size: 14px; color: var(--text); white-space: pre-wrap; }
   .cue.static { margin: 4px 0 12px; }
@@ -272,13 +280,6 @@
   .pkbar .primary { flex: 1; }
   .pkitem:active, .rowbtn:active, .wcard:active { background: var(--card2); }
 
-  .toast {
-    position: fixed; left: 50%; transform: translateX(-50%); z-index: 30;
-    bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom));
-    background: var(--card2); border: 1px solid var(--line); border-radius: 12px;
-    padding: 10px 16px; font-size: 15px; max-width: calc(100% - 32px); text-align: center;
-    box-shadow: 0 8px 24px rgb(0 0 0 / .4);
-  }
 
 </style>
 </head>
@@ -288,8 +289,8 @@
     <h1 id="title">Log</h1>
     <div class="topright">
       <a class="gear" href="/" aria-label="All apps"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg></a>
-      <div class="sync" id="sync" role="status"></div>
-      <button class="gear" id="gear" aria-label="Settings" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></button>
+      <div class="sync" id="sync" role="status">…</div>
+      <button class="gear" id="gear" aria-label="Settings" hidden></button>
     </div>
   </div>
 
@@ -317,12 +318,11 @@
   </div>
 </nav>
 
-<section class="sheet" id="editor" hidden aria-label="Workout"></section>
-<section class="sheet" id="picker" hidden aria-label="Choose exercise"></section>
-<section class="sheet" id="exsheet" hidden aria-label="Exercise"></section>
-<section class="sheet" id="exedit" hidden aria-label="Edit exercise"></section>
-<section class="sheet" id="settings" hidden aria-label="Settings"></section>
-<div class="toast" id="toast" role="status" hidden></div>
+<section class="sheet cx-anim-up" id="editor" hidden aria-label="Workout"></section>
+<section class="sheet cx-anim-up" id="picker" hidden aria-label="Choose exercise"></section>
+<section class="sheet cx-anim-up" id="exsheet" hidden aria-label="Exercise"></section>
+<section class="sheet cx-anim-up" id="exedit" hidden aria-label="Edit exercise"></section>
+<section class="sheet cx-anim-up" id="settings" hidden aria-label="Settings"></section>
 
 <script type="module" src="/lifting/app.js"></script>
 </body>

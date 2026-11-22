@@ -26,7 +26,7 @@ let current = null;         // string index being tuned right now
 let done = new Set();       // strings that have been in tune this session
 let recent = [];            // last few detected frequencies, for a steady median
 let lastHeard = 0, inTuneSince = 0, muteUntil = 0, frame = 0;
-let ctx = null, analyser = null, stream = null, buf = null, raf = 0, wake = null;
+let ctx = null, analyser = null, source = null, stream = null, buf = null, raf = 0, wake = null;
 
 const ICON = {
   up: '<svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
@@ -124,20 +124,23 @@ function show(freq) {
   const state = abs <= IN_TUNE ? "in" : abs <= NEAR ? "near" : "far";
   stage.className = `stage state-${state}`;
   needle.classList.remove("idle");
-  needle.style.transform = `rotate(${(Math.max(-50, Math.min(50, cents)) / 50) * 60}deg)`;
+  needle.style.transform = `rotate(${(Math.max(-47, Math.min(47, cents)) / 50) * 60}deg)`; // stops short of the ±50 labels
   $("note").innerHTML = `${name}<sub>${octave}</sub>`;
   // Too low means the string is too loose: tighten (tune up).
   $("status").innerHTML = state === "in" ? `${ICON.check} In tune`
     : cents < 0 ? `${ICON.up} Tune up` : `${ICON.down} Tune down`;
   const rc = Math.round(cents) || 0; // no "-0"
-  $("readout").textContent = `${freq.toFixed(1)} Hz · ${rc > 0 ? "+" : ""}${rc} cents`;
+  const semis = Math.round(abs / 100); // a whole note or more off reads better in semitones
+  $("readout").textContent = `${freq.toFixed(1)} Hz · ` + (abs > 100
+    ? `${semis} semitone${semis === 1 ? "" : "s"} ${cents < 0 ? "low" : "high"}`
+    : `${rc > 0 ? "+" : ""}${rc} cents`);
 
   if (state === "in" && current !== null) {
     if (!inTuneSince) inTuneSince = performance.now();
     else if (performance.now() - inTuneSince > HOLD_MS && !done.has(current)) {
       done.add(current);
       renderStrings();
-      if (navigator.vibrate) navigator.vibrate(40);
+      if (navigator.vibrate && navigator.userActivation?.hasBeenActive) navigator.vibrate(40); // Chrome blocks it before a tap
     }
   } else inTuneSince = 0;
 }
@@ -204,15 +207,20 @@ async function openMic() {
     return;
   }
   clearTimeout(slow);
+  // The app went to the background while the permission prompt was up: don't listen there.
+  if (document.hidden) { stop(); resumeOnShow = true; return; }
   $("micmsg").hidden = true;
   ctx = ctx && ctx.state !== "closed" ? ctx : new AudioContext();
   analyser = ctx.createAnalyser();
   analyser.fftSize = 8192; // ~170 ms: enough cycles of a bass B0 (31 Hz); guitar uses the newest half
   buf = new Float32Array(analyser.fftSize);
-  ctx.createMediaStreamSource(stream).connect(analyser);
+  source?.disconnect();
+  source = ctx.createMediaStreamSource(stream);
+  source.connect(analyser);
   // Browsers may keep audio paused until the first tap on the page; then one tap anywhere starts it.
   if (ctx.state === "suspended") {
-    ctx.resume().catch(() => {});
+    // resume() is async: give it a moment before deciding a tap is needed.
+    await Promise.race([ctx.resume().catch(() => {}), new Promise((r) => setTimeout(r, 300))]);
     if (ctx.state === "suspended") {
       micMessage(`<span>Tap anywhere to start listening</span>`, false);
       addEventListener("pointerdown", () => { ctx.resume(); $("micmsg").hidden = true; }, { once: true });
@@ -228,6 +236,8 @@ function stop() {
   raf = 0;
   stream?.getTracks().forEach((t) => t.stop());
   stream = null;
+  source?.disconnect();
+  source = null;
   wake?.release().catch(() => {});
   wake = null;
   recent = [];
@@ -236,7 +246,7 @@ function stop() {
 
 // Release the mic when the app is in the background; pick it up again on return.
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") { if (stream) { stop(); resumeOnShow = true; } }
+  if (document.visibilityState === "hidden") { if (stream || starting) { stop(); resumeOnShow = true; } }
   else if (resumeOnShow) { resumeOnShow = false; start(); }
 });
 let resumeOnShow = false;
@@ -268,9 +278,12 @@ $("micmsg").addEventListener("click", (ev) => { if (ev.target.id === "retry") st
 // Each open sheet is a history entry, so the phone's back gesture closes it.
 
 const open = [];
+// Only the top sheet shows its panel; one under it (the picker under the editor) is hidden.
+const layer = () => open.forEach((id, i) => $(id).classList.toggle("under", i < open.length - 1));
 function openSheet(id) {
   if (!open.includes(id)) { open.push(id); history.pushState({ sheet: id }, ""); }
   $(id).hidden = false;
+  layer();
 }
 const closeSheet = () => history.back();
 addEventListener("popstate", (ev) => { // close every sheet above the one we landed on
@@ -282,6 +295,7 @@ addEventListener("popstate", (ev) => { // close every sheet above the one we lan
     return;
   }
   while (open.length && open.at(-1) !== keep) $(open.pop()).hidden = true;
+  layer();
 });
 for (const id of ["picker", "editor"])
   $(id).addEventListener("click", async (ev) => { // tap the dim area

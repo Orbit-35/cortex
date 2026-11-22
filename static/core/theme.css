@@ -18,3 +18,11 @@
 /* Inline Lucide icons from core/icons.js: sized to the text, coloured by it. */
 .ic { width: 1.15em; height: 1.15em; fill: none; stroke: currentColor; stroke-width: 2;
   stroke-linecap: round; stroke-linejoin: round; vertical-align: -.2em; flex: none; }
+
+/* Sheets and dialogs slide up a little as they open (DESIGN D53). */
+@keyframes cx-up { from { transform: translateY(16px); opacity: 0; } }
+@keyframes cx-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: no-preference) {
+  .cx-anim-up, .cx-ask-box { animation: cx-up .18s ease-out; }
+  .cx-anim-fade { animation: cx-fade .18s ease-out; }
+}

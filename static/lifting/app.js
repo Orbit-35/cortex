@@ -2,7 +2,7 @@
 // All data goes through the Cortex core (saved on this device first, synced in the
 // background). The maths and data shaping live in the pure modules imported below.
 import * as cortex from "/core/cortex.js";
-import { ask as uiAsk, cancelAsk, noCallout } from "/core/ui.js";
+import { ask as uiAsk, cancelAsk, noCallout, toast as uiToast } from "/core/ui.js";
 import { lineChart, chartDots } from "/core/chart.js";
 import { icon } from "/core/icons.js";
 import { e1rm, dayKey, personalRecords, prKind, sessionSeries } from "/lifting/stats.js";
@@ -60,13 +60,13 @@ function fmtClock(ms) {
 // In-app confirm (DESIGN D41), shared by all apps in /core/ui.js. Lifting's calls default to a red "Delete".
 const ask = (title, body = "", ok = "Delete", danger = true, no = "Cancel") => uiAsk(title, body, { yes: ok, no, danger });
 
-let toastTimer;
+// Shared toast (core/ui.js): above the tab bar on the tabs, near the bottom inside a sheet.
 function toast(text) {
-  $("toast").textContent = text;
-  $("toast").hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => ($("toast").hidden = true), 3200);
+  const inSheet = !!document.querySelector(".sheet:not([hidden])");
+  document.documentElement.style.setProperty("--toast-bottom", inSheet ? "24px" : "calc(var(--nav-h) + 16px)");
+  uiToast(text);
 }
+const plural = (n, word) => `${n.toLocaleString()} ${word}${n === 1 ? "" : "s"}`;
 
 // The live workout draft lives in this device's storage until Finish (DESIGN D25).
 function loadLive() {
@@ -89,6 +89,7 @@ function showTab(name) {
   $("gear").hidden = tab !== "profile";
   render();
 }
+addEventListener("hashchange", () => { if (!stack.length) showTab(location.hash.slice(1)); });
 document.querySelector("nav.tabbar").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-tab]");
   if (!b) return;
@@ -98,8 +99,11 @@ document.querySelector("nav.tabbar").addEventListener("click", (ev) => {
 });
 
 noCallout();
+$("gear").innerHTML = icon("settings");
 
+let loaded = false; // nothing is drawn until storage has been read once, so empty states never flash
 function render() {
+  if (!loaded) return;
   if (tab === "log") renderLog();
   else if (tab === "progress") renderProgress();
   else if (tab === "exercises") renderExercises();
@@ -138,7 +142,7 @@ function renderLog() {
       if (m !== month) { html += `<h2>${esc(m)}</h2>`; month = m; }
       const all = w.exercises.flatMap((x) => x.sets).filter(isWorking);
       const nPr = all.filter((s) => prs.has(s.client_id)).length;
-      const meta = [fmtDuration(w.duration_min), all.length ? `${Math.round(convert(volumeKg(all), "kg", unit)).toLocaleString()} ${unit}` : "", `${all.length} sets`]
+      const meta = [fmtDuration(w.duration_min), all.length ? `${Math.round(convert(volumeKg(all), "kg", unit)).toLocaleString()} ${unit}` : "", plural(all.length, "set")]
         .filter(Boolean).map(esc).concat(nPr ? [`<span class="pr-tag">${icon("trophy")} ${nPr} PR${nPr > 1 ? "s" : ""}</span>`] : []).join(" · ");
       html += `<button class="card wcard" data-act="open" data-id="${esc(w.id)}">
         <div class="head"><span class="name">${esc(w.name)}</span><span class="muted small">${esc(fmtDate(w.start))}</span></div>
@@ -199,7 +203,9 @@ function openEditor(draft, original) {
   renderEditor();
 }
 
+let updateWaiting = false; // a new version arrived mid-edit: load it once the editor closes
 function closeEditor() {
+  if (updateWaiting) { location.reload(); return; }
   editor = null;
   $("editor").hidden = true;
   $("picker").hidden = true;
@@ -358,8 +364,8 @@ function renderEditor() {
         <div class="grid setrow ${live ? "live" : "edit"}${r.done && live ? " done" : ""}">
           <button class="setno t-${r.type || "normal"}" data-act="setmenu" aria-label="Set ${label} options${r.pr ? ", personal record" : ""}">${r.pr ? icon("trophy") : label}${r.rpe != null ? `<small>@${esc(r.rpe)}</small>` : ""}</button>
           <button class="prev" data-act="useprev" ${p ? "" : "disabled"}>${p ? esc(setText(p)) : "—"}</button>
-          <input data-f="weight" inputmode="decimal" value="${esc(r.weight)}" placeholder="${esc(hint.weight)}" aria-label="Weight">
-          <input data-f="reps" inputmode="numeric" value="${esc(r.reps)}" placeholder="${esc(hint.reps)}" aria-label="Reps">
+          <input data-f="weight" inputmode="decimal" enterkeyhint="next" value="${esc(r.weight)}" placeholder="${esc(hint.weight)}" aria-label="Weight">
+          <input data-f="reps" inputmode="numeric" enterkeyhint="next" value="${esc(r.reps)}" placeholder="${esc(hint.reps)}" aria-label="Reps">
           ${live ? `<button class="tick" data-act="tick" aria-pressed="${r.done}" aria-label="Set done">${icon("check")}</button>` : ""}
         </div>
       </div>`;
@@ -419,6 +425,15 @@ $("editor").addEventListener("input", (ev) => {
 });
 
 const swap = (arr, i, j) => { [arr[i], arr[j]] = [arr[j], arr[i]]; };
+
+// The keyboard's Next key walks weight → reps → the next set's weight, for one-handed logging.
+$("editor").addEventListener("keydown", (ev) => {
+  if (ev.key !== "Enter" || !ev.target.matches?.('input[data-f="weight"], input[data-f="reps"]')) return;
+  ev.preventDefault();
+  const fields = [...$("editor").querySelectorAll('input[data-f="weight"], input[data-f="reps"]')];
+  const next = fields[fields.indexOf(ev.target) + 1];
+  if (next) next.focus(); else ev.target.blur();
+});
 
 $("editor").addEventListener("click", async (ev) => {
   if (swipeJustMoved) { swipeJustMoved = false; return; }
@@ -574,7 +589,8 @@ function tick(xi, si) {
   ];
   const kind = prKind({ value: w, unit: d.unit, data: { reps: n }, recorded_at: r.at }, earlier);
   r.pr = kind;
-  if (kind === "e1rm") toast(`New best: ~${fmtNum(Math.round(convert(e1rm(convert(w, d.unit, "kg"), n), "kg", d.unit) * 10) / 10)} ${d.unit} estimated 1RM`);
+  if (kind === "e1rm") { const step = d.unit === "kg" ? 0.5 : 1, est = convert(e1rm(convert(w, d.unit, "kg"), n), "kg", d.unit);
+    toast(`New best · est. 1RM ${fmtNum(Math.round(est / step) * step)} ${d.unit}`); }
   else if (kind === "reps") toast(`Rep PR: heaviest ${n}-rep set yet`);
   if (navigator.vibrate) navigator.vibrate(kind ? [30, 60, 30] : 25);
 }
@@ -602,7 +618,7 @@ async function saveEditor() {
   if (d.mode === "live") clearLive();
   editor.dirty = false;
   history.back();
-  toast(d.mode === "edit" ? "Workout updated" : `Workout saved · ${total} sets`);
+  toast(d.mode === "edit" ? "Workout updated" : `Workout saved · ${plural(total, "set")}`);
 }
 
 // ---------- Exercise picker ----------
@@ -723,7 +739,7 @@ function renderProgress() {
       <div class="tile"><div class="k">PRs</div><div class="v">${prs.size.toLocaleString()}</div></div>
       <div class="tile"><div class="k">Time training</div><div class="v">${t.minutes ? fmtDuration(t.minutes) : "—"}</div></div>
     </div>
-    <div class="muted small" style="margin-top:8px">${t.sets.toLocaleString()} sets · ${t.reps.toLocaleString()} reps</div>
+    <div class="muted small" style="margin-top:8px">${plural(t.sets, "set")} · ${plural(t.reps, "rep")}</div>
 
     <div class="card milestone">
       <div class="k">You've lifted</div>
@@ -747,8 +763,8 @@ function renderProgress() {
 
     <h2>Top lifts</h2>
     <ul class="list">${top.map((x) => `<li><button class="rowbtn" data-key="${esc(x.key)}">
-      <span>${esc(exName(x.key))}<br><span class="muted small">${x.n} session${x.n === 1 ? "" : "s"}</span></span>
-      <span>${x.best ? `${fmtW(x.best.e1rm)} ${unit}<br><span class="muted small">est. 1RM</span>` : ""}</span></button></li>`).join("")}</ul>`;
+      <span>${esc(exName(x.key))}<br><span class="muted small">${plural(x.n, "session")}</span></span>
+      <span class="val">${x.best ? `${fmtW(x.best.e1rm)} ${unit}<br><span class="muted small">est. 1RM</span>` : ""}</span></button></li>`).join("")}</ul>`;
 }
 
 // 2.2 -> "2.2", 1234.5 -> "1,235", 0.4 -> "0.4"
@@ -873,7 +889,7 @@ function renderExerciseInto(el, key) {
 
   const points = series.map((d) => ({
     day: d.day, v: convert(d[chartMetric], "kg", unit),
-    sub: chartMetric === "volume" ? `${d.sets} sets` : d.best ? `${fmtW(d.best.weight)}×${d.best.reps}` : "",
+    sub: chartMetric === "volume" ? plural(d.sets, "set") : d.best ? `${fmtW(d.best.weight)}×${d.best.reps}` : "",
   })).filter((p) => p.v > 0);
   drawChart(el.querySelector(".chart"), points);
 }
@@ -885,7 +901,7 @@ function openExercise(key) {
     <div class="sheet-top">
       <button class="back" data-act="close" aria-label="Back">${icon("chevron-left")}</button>
       <div class="title" id="extitle">${esc(exName(key))}</div>
-      <button class="ghost" data-act="editex">Edit</button>
+      <button class="ghost accent" data-act="editex">Edit</button>
     </div>
     <div class="sheet-body" id="exbody"></div></div>`;
   renderExerciseInto($("exbody"), key);
@@ -987,7 +1003,7 @@ function renderExercises() {
     html += `<h2>${esc(MUSCLES[m] || "No muscle set")}</h2><ul class="list">` + items.sort((a, b) => a.name.localeCompare(b.name)).map((x) =>
       `<li><button class="rowbtn" data-key="${esc(x.key)}">
         <span>${esc(x.name)}${x.custom ? ` <span class="muted small">· yours</span>` : ""}${x.hidden ? ` <span class="muted small">· hidden</span>` : ""}</span>
-        <span class="muted small">${counts.get(x.key) ? `${counts.get(x.key)} sets` : esc(x.equipment || "")}</span></button></li>`
+        <span class="muted small">${counts.get(x.key) ? plural(counts.get(x.key), "set") : esc(x.equipment || "")}</span></button></li>`
     ).join("") + `</ul>`;
   }
   if (!list.length) html += `<p class="empty">No exercises match.</p>`;
@@ -1126,12 +1142,12 @@ function renderSettings() {
     </div>
     <div class="sheet-body">
       <ul class="list">
-        <li><span>Weight unit<br><span class="muted small">Lifts and bodyweight. Saved sets keep the unit they were logged in.</span></span>
+        <li><span>Weight unit<span class="muted small sub">Lifts and bodyweight. Saved sets keep the unit they were logged in.</span></span>
           <span class="seg" role="group" aria-label="Weight unit">
             <button data-unit="lb" aria-pressed="${unit === "lb"}">lb</button>
             <button data-unit="kg" aria-pressed="${unit === "kg"}">kg</button>
           </span></li>
-        <li><span>App version<br><span class="muted small" id="vstate">Checking…</span></span><span class="muted small" id="vlocal"></span></li>
+        <li><span>App version<span class="muted small sub" id="vstate">Checking…</span></span><span class="muted small" id="vlocal"></span></li>
       </ul>
     </div></div>`;
   showVersion();
@@ -1187,6 +1203,7 @@ async function refresh() {
   workSets = sets.filter(isWorking);
   workouts = groupWorkouts(entries);
   lib = resolveExercises(entries.filter((e) => e.metric === EXERCISE));
+  loaded = true;
   try { prs = prEvents(workSets); } catch (err) { console.error("PR maths failed:", err); prs = new Map(); }
   if (!editor) render();
   if (!$("picker").hidden) renderPicker();
@@ -1224,7 +1241,7 @@ if ("serviceWorker" in navigator) {
   let reloading = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (!hadController || reloading) return; // first install: this page is already current
-    if (editor?.dirty && editor.draft.mode !== "live") { toast("Update ready: it loads after you save"); return; }
+    if (editor?.dirty && editor.draft.mode !== "live") { updateWaiting = true; toast("Update ready: it loads when you close this workout"); return; }
     reloading = true;
     try { if (editor?.draft.mode === "live") sessionStorage.setItem("cortex.reopenLive", "1"); } catch {}
     location.reload();

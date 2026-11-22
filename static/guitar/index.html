@@ -28,11 +28,12 @@
   .iconbtn:active { background: var(--card); }
 
   .tunbtn { display: flex; align-items: center; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 999px;
-    padding: 0 10px 0 16px; min-height: 42px; font-size: 15px; font-weight: 600; max-width: 55%; }
+    padding: 0 10px 0 16px; min-height: 44px; font-size: 15px; font-weight: 600; max-width: 55%; }
   .tunbtn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tunbtn svg { width: 18px; height: 18px; flex: none; color: var(--muted); }
 
   /* Bottom sheets: tuning list and custom tuning editor */
+  .sheet.under { visibility: hidden; }
   .sheet { position: fixed; inset: 0; z-index: 20; background: rgb(0 0 0 / .55); display: flex; align-items: flex-end; justify-content: center; }
   .panel { width: 100%; max-width: 520px; max-height: 88dvh; overflow-y: auto; background: var(--bg); border: 1px solid var(--line); border-bottom: 0;
     border-radius: 20px 20px 0 0; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); }
@@ -143,8 +144,8 @@
   </div>
 </div>
 
-<div class="sheet" id="picker" hidden role="dialog" aria-modal="true" aria-label="Choose tuning"><div class="panel" id="pickerpanel"></div></div>
-<div class="sheet" id="editor" hidden role="dialog" aria-modal="true" aria-label="Custom tuning"><div class="panel" id="editorpanel"></div></div>
+<div class="sheet cx-anim-fade" id="picker" hidden role="dialog" aria-modal="true" aria-label="Choose tuning"><div class="panel cx-anim-up" id="pickerpanel"></div></div>
+<div class="sheet cx-anim-fade" id="editor" hidden role="dialog" aria-modal="true" aria-label="Custom tuning"><div class="panel cx-anim-up" id="editorpanel"></div></div>
 
 <script type="module" src="/guitar/app.js"></script>
 </body>

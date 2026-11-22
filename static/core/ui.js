@@ -12,6 +12,7 @@ const CSS = `
 .cx-ask-box p { margin: 8px 0 0; color: var(--muted); font-size: 15px; line-height: 1.4; }
 .cx-ask-btns { display: flex; gap: 10px; margin-top: 20px; }
 .cx-ask-btns button { flex: 1; min-height: 52px; font: inherit; font-size: 16px; font-weight: 700; border-radius: 14px; cursor: pointer; }
+.cx-ask-btns button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cx-no { background: var(--card); border: 1px solid var(--line); color: var(--text); }
 .cx-yes { background: var(--accent); border: 0; color: var(--on-accent); }
 .cx-yes.cx-danger { background: var(--danger); }
@@ -84,7 +85,8 @@ export function noCallout() {
 }
 
 // Register the service worker and reload into a new version as soon as it's installed (DESIGN D36).
-// canReload() can say "not now" (e.g. unsaved typing); the update then loads on the next open.
+// canReload() can say "not now" (e.g. unsaved typing); the update then loads the next time the
+// page is hidden with nothing unsaved (switching apps, locking the phone).
 export function keepUpdated(canReload = () => true) {
   if (!("serviceWorker" in navigator)) return;
   const hadController = !!navigator.serviceWorker.controller;
@@ -93,10 +95,17 @@ export function keepUpdated(canReload = () => true) {
       if (document.visibilityState === "visible") reg.update().catch(() => {});
     });
   }).catch((err) => console.warn("No service worker:", err));
-  let reloading = false;
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (!hadController || reloading || !canReload()) return; // first install: this page is already current
+  let reloading = false, waiting = false;
+  const reload = () => {
+    if (reloading) return;
+    if (!canReload()) { waiting = true; return; }
     reloading = true;
     location.reload();
+  };
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController) reload(); // first install: this page is already current
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (waiting && document.visibilityState === "hidden") reload();
   });
 }

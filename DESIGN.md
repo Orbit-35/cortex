@@ -292,6 +292,21 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Why:** the bug audit found that one bad entry, or an outbox over 2000, blocked a device's sync forever with only "N pending" showing, and that a device with a slow clock could have its edits silently dropped while it still showed them.
 - **Trade-off:** rejected entries are dropped from the outbox with a console warning only; a visible "sync error" note can come later. Pulls still aren't paged (a fresh device on a very large database downloads everything in one reply).
 
+### D53. Phone polish from the UI review
+- **Decision:**
+  - Every tap target is at least 44 px. List rows are 52 px tall and the whole row is the button. Chips, small primary buttons, the set number (40 px), the ••• button and the tuning button grew.
+  - Lifting uses the shared toast from `core/ui.js`. It sits above the tab bar on the tabs and near the bottom inside a full-screen sheet, so it no longer covers "+ Add set".
+  - Nothing is drawn until storage has been read once, so "No workouts yet" never flashes on open.
+  - Sheets and the confirm dialog slide up and fade in over 180 ms (`cx-anim-up`/`cx-anim-fade` in `core/theme.css`), only when the phone allows motion.
+  - Counts use proper plurals ("1 set"). The PR toast rounds: "New best · est. 1RM 216 lb".
+  - The keyboard's Next key moves weight → reps → the next set.
+  - Chip rows scroll edge to edge, so a cut-off chip shows the row scrolls.
+  - The settings gear is the Lucide icon (D51), not a sun-like drawing.
+  - Tuner: the needle stops short of the ±50 labels, far-off notes read "3 semitones low", the custom-tuning editor hides the picker under it, and the buzz waits for the first tap (Chrome blocks it before).
+  - An update that arrives mid-edit now really loads: in Lifting when the workout closes, in other apps the next time the page is hidden with nothing unsaved. Offline, an uncached address opens that app's page (or home), not always Lifting.
+- **Why:** a phone-sized review with screenshots found small targets (28 px rows), a toast over the editor, an empty-state flash, an update that never loaded, and other rough edges.
+- **Trade-off:** none of these change how the apps work. The shared header for all apps (same place for "All apps", same title size) is a bigger layout change, so it waits for the owner's say.
+
 ## Security and hosting
 
 ### D16. No auth yet; tailnet only
