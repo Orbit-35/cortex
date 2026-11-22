@@ -16,7 +16,7 @@ const CSS = `
 .cx-no { background: var(--card); border: 1px solid var(--line); color: var(--text); }
 .cx-yes { background: var(--accent); border: 0; color: var(--on-accent); }
 .cx-yes.cx-danger { background: var(--danger); }
-.cx-toast { position: fixed; left: 50%; transform: translateX(-50%); z-index: 45;
+.cx-toast { position: fixed; left: 50%; transform: translateX(-50%); z-index: 45; width: max-content;
   bottom: calc(var(--toast-bottom, 24px) + env(safe-area-inset-bottom));
   background: var(--card2, var(--card)); border: 1px solid var(--line); border-radius: 12px; color: var(--text);
   padding: 10px 16px; font-size: 15px; max-width: calc(100% - 32px); text-align: center; box-shadow: 0 8px 24px rgb(0 0 0 / .4); }

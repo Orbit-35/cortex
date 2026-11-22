@@ -22,6 +22,7 @@
 /* Sheets and dialogs slide up a little as they open (DESIGN D53). */
 @keyframes cx-up { from { transform: translateY(16px); opacity: 0; } }
 @keyframes cx-fade { from { opacity: 0; } }
+@keyframes cx-slide { from { transform: translateY(16px); } }
 @media (prefers-reduced-motion: no-preference) {
   .cx-anim-up, .cx-ask-box { animation: cx-up .18s ease-out; }
   .cx-anim-fade { animation: cx-fade .18s ease-out; }

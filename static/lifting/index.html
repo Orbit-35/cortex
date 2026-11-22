@@ -38,6 +38,11 @@
   input:focus, textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
 
   /* Layout: a page column, a top bar, and the bottom tab bar */
+  /* The shared toast sits above the tab bar, or near the bottom while a full-screen sheet is open.
+     CSS decides, so it moves by itself when a sheet closes. */
+  :root { --toast-bottom: calc(var(--nav-h) + 16px); }
+  :root:has(.sheet:not([hidden])) { --toast-bottom: 24px; }
+  .sheet.cx-anim-up { animation-name: cx-slide; } /* full-screen: slide only, no see-through fade */
   .wrap { max-width: 560px; margin-inline: auto; padding: 0 16px; }
   .top {
     position: sticky; top: 0; z-index: 5; background: var(--bg);
@@ -128,7 +133,7 @@
 
   .ex { margin-top: 22px; }
   .ex-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .ex-head .exname { color: var(--accent); font-weight: 700; font-size: 18px; background: none; border: 0; padding: 8px 0; text-align: left; }
+  .ex-head .exname { color: var(--accent); font-weight: 700; font-size: 18px; background: none; border: 0; padding: 8px 0; min-height: 44px; text-align: left; }
   .setno small { display: block; font-size: 11px; font-weight: 600; color: var(--warn); line-height: 1; }
   .setmenu { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin: 4px 0 6px; }
   .setmenu .chip { min-width: 48px; }
@@ -171,7 +176,7 @@
   }
   .setrow.done .tick { background: var(--good); border-color: var(--good); color: #0b1a12; }
   .pr { font-size: 13px; }
-  .addset { width: 100%; margin-top: 6px; min-height: 40px; border-radius: 10px; border: 0; background: var(--card); color: var(--muted); font-weight: 600; }
+  .addset { width: 100%; margin-top: 6px; min-height: 44px; border-radius: 10px; border: 0; background: var(--card); color: var(--muted); font-weight: 600; }
   .addex { margin-top: 26px; }
 
   /* Exercise picker */

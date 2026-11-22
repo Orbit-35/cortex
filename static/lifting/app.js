@@ -60,12 +60,8 @@ function fmtClock(ms) {
 // In-app confirm (DESIGN D41), shared by all apps in /core/ui.js. Lifting's calls default to a red "Delete".
 const ask = (title, body = "", ok = "Delete", danger = true, no = "Cancel") => uiAsk(title, body, { yes: ok, no, danger });
 
-// Shared toast (core/ui.js): above the tab bar on the tabs, near the bottom inside a sheet.
-function toast(text) {
-  const inSheet = !!document.querySelector(".sheet:not([hidden])");
-  document.documentElement.style.setProperty("--toast-bottom", inSheet ? "24px" : "calc(var(--nav-h) + 16px)");
-  uiToast(text);
-}
+// Shared toast (core/ui.js); its height above the bottom is set in index.html CSS.
+const toast = (text) => uiToast(text);
 const plural = (n, word) => `${n.toLocaleString()} ${word}${n === 1 ? "" : "s"}`;
 
 // The live workout draft lives in this device's storage until Finish (DESIGN D25).

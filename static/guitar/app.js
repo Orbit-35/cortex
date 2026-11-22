@@ -56,7 +56,7 @@ function drawGauge() {
   const [zx1, zy1] = at(-IN_TUNE, r + 10), [zx2, zy2] = at(IN_TUNE, r + 10);
   s += `<path class="zone" d="M${zx1} ${zy1} A${r + 10} ${r + 10} 0 0 1 ${zx2} ${zy2}"/>`;
   for (const c of [-50, -25, 25, 50]) {
-    const [x, y] = at(c, r - 38);
+    const [x, y] = at(c, r + 22); // outside the arc, so the needle never crosses a label
     s += `<text class="lbl" x="${x}" y="${y + 4}">${c > 0 ? "+" : ""}${c}</text>`;
   }
   s += `<g class="needle idle" id="needle"><line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - r + 4}"/><circle cx="${cx}" cy="${cy}" r="9"/></g>`;
@@ -124,7 +124,7 @@ function show(freq) {
   const state = abs <= IN_TUNE ? "in" : abs <= NEAR ? "near" : "far";
   stage.className = `stage state-${state}`;
   needle.classList.remove("idle");
-  needle.style.transform = `rotate(${(Math.max(-47, Math.min(47, cents)) / 50) * 60}deg)`; // stops short of the ±50 labels
+  needle.style.transform = `rotate(${(Math.max(-50, Math.min(50, cents)) / 50) * 60}deg)`;
   $("note").innerHTML = `${name}<sub>${octave}</sub>`;
   // Too low means the string is too loose: tighten (tune up).
   $("status").innerHTML = state === "in" ? `${ICON.check} In tune`
