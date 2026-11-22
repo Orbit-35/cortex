@@ -38,3 +38,4 @@
 .cx-iconbtn:active { background: var(--card); }
 .cx-iconbtn .ic { width: 24px; height: 24px; vertical-align: 0; }
 .cx-apps { margin-left: -10px; } /* the icon, not the tap area, lines up with the page edge */
+.cx-right > .cx-iconbtn:last-child { margin-right: -10px; } /* same on the right edge */
