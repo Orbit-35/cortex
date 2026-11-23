@@ -1,12 +1,17 @@
 // One browser page ("device") with the helpers UI tests use. Every helper works from outside
 // the app: no test hooks in app code. page.cortex() imports /core/cortex.js inside the page, so it
 // gets the same module instance the app uses and can read local storage or trigger a sync.
-import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const OUT = fileURLToPath(new URL("../out", import.meta.url));
 const FAKE_MIC = readFileSync(fileURLToPath(new URL("./fakes/fake-mic.js", import.meta.url)), "utf8");
+// Old FAIL-* screenshots would look like new failures: runners clear them at the start.
+export function clearFailures() {
+  if (!existsSync(OUT)) return;
+  for (const f of readdirSync(OUT)) if (f.startsWith("FAIL-")) rmSync(join(OUT, f), { force: true });
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export const DEVICES = {
@@ -27,6 +32,11 @@ export class Page {
     this.errors = [];
     this.offline = false;
   }
+
+  // While offline (or the server is down) network errors are expected, and for a second after:
+  // a request that failed while offline can log its error just after the test goes back online.
+  get offline() { return this._offline || Date.now() < (this._quietUntil || 0); }
+  set offline(v) { if (this._offline && !v) this._quietUntil = Date.now() + 1000; this._offline = v; }
 
   send(method, params) { return this.cdp.send(method, params, this.sessionId); }
 

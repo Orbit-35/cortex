@@ -1,9 +1,9 @@
 // A layout check run inside the page: tap targets under 44 px and anything wider than the
-// screen. Returns a list of problems (empty = clean). Use with page.eval(AUDIT).
+// screen. It checks the whole page, including controls below the fold (scroll is not needed). Returns a list of problems (empty = clean). Use with page.eval(AUDIT).
 export const AUDIT = `(() => {
   const out = [];
   const shown = (el) => { const r = el.getBoundingClientRect(), s = getComputedStyle(el);
-    return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && !el.closest("[hidden]") && r.bottom > 0 && r.top < innerHeight; };
+    return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && !el.closest("[hidden]"); };
   const name = (el) => (el.getAttribute("aria-label") || el.innerText || el.placeholder || el.className || el.tagName).trim().replace(/\\s+/g, " ").slice(0, 30);
   for (const el of document.querySelectorAll("button, a[href], input:not([type=hidden]), select, textarea, [role=button], [role=tab]")) {
     if (!shown(el) || el.disabled) continue;

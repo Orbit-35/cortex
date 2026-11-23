@@ -21,6 +21,15 @@ You are a test agent for Cortex, a local-first FastAPI + SQLite web app in this 
 3. If a check needs code, write a throwaway `*.ui.test.mjs` in your scratch folder using `tests/ui/lib/harness.mjs` (`useApp()`, `app.device()`), or a real one under `tests/ui/` if asked. Page helpers are in `tests/ui/lib/page.mjs`: `goto`, `waitFor`, `click`, `clickText`, `tap`, `longPress`, `drag`, `type`, `key`, `back`, `setOffline`, `cortex(fn, ...args)`, `syncIdle`, `shot`, plus the fake mic (`fakeMic: true`, then `window.__fakeMic.set({freq})`).
 4. **Open the screenshots** in `tests/ui/out/` and look at them: overflow, clipped or wrapped text, tap targets under 44 px, the pink accent (#ff2e88), no emoji. Failures save `FAIL-*.png` and `.html` there too.
 
+## Good to know
+- A healthy full run takes about 80-90 s and ends with `15/15 files passed. All good.` Much slower, or fewer files, means something is wrong.
+- `--grep` matches anywhere in the file path, so `--grep ui` or `--grep tests` selects everything. Use a file name word (`tuner`, `layout`).
+- Step files: an unknown step key fails the run. Screenshot names get the device added (`smoke-log-small.png`), so runs on different devices don't overwrite each other.
+- `FAIL-*` files in `tests/ui/out/` are cleared at the start of each run; anything else there may be from an older run, so check the timestamps.
+- The layout audit checks every control on the page (also below the fold), on the screens in `tests/ui/layout.ui.test.mjs` (main tabs, editor, picker, settings). A change to another sheet or menu needs its own `{"audit": "name"}` step.
+- Don't run `node tests/clean.mjs` while another test run is going: it deletes every `cortex-test-*` temp folder.
+- Running from a git worktree copy: the kit needs the venv, so link it first (`New-Item -ItemType Junction -Path <worktree>\.venv -Target <repo>\.venv`) and remove the link (not the target) before removing the worktree.
+
 ## Report
 - PASS or FAIL per group and per thing you were asked to check, with numbers (sizes, positions, counts).
 - For each failure: the test or step, the assertion, the screenshot path, and your diagnosis with `file:line` if you can.

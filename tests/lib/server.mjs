@@ -26,14 +26,20 @@ const same = (a, b) => {
   try { return realpathSync(a).toLowerCase() === realpathSync(b).toLowerCase(); } catch { return resolve(a).toLowerCase() === resolve(b).toLowerCase(); }
 };
 
+const inside = (child, parent) => {
+  const real = (p) => { try { return realpathSync(p); } catch { return resolve(p); } };
+  const c = real(child).toLowerCase(), p = real(parent).toLowerCase().replace(/[\\/]+$/, "");
+  return c === p || c.startsWith(p + "\\") || c.startsWith(p + "/");
+};
+
 // Start a server. Options: { dir } reuses a folder (same database, e.g. a restart).
 // Returns { url, port, dir, db, stop(), restart() }.
 export async function startServer({ dir, port } = {}) {
   dir ||= mkdtempSync(join(tmpdir(), "cortex-test-"));
   const db = join(dir, "test.db");
-  if (same(db, REAL_DB) || (existsSync(REAL_DB) && same(dir, ROOT))) throw new Error("refusing to run a test server on the real cortex.db");
+  if (same(db, REAL_DB) || inside(dir, ROOT)) throw new Error("refusing to run a test server inside the repo (real cortex.db and backups/ live there)");
   port ||= await freePort();
-  if (port === 8000) throw new Error("refusing port 8000: that's the real server");
+  if (Number(port) === 8000) throw new Error("refusing port 8000: that's the real server");
   if (!existsSync(PYTHON)) throw new Error(`no Python venv at ${PYTHON}`);
 
   const proc = spawn(PYTHON, ["-X", "cortex-test-server", "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", String(port), "--log-level", "warning"], {

@@ -13,6 +13,7 @@ import { startServer } from "../lib/server.mjs";
 import { launch } from "./lib/browser.mjs";
 import { SEEDS } from "./lib/seed.mjs";
 import { AUDIT } from "./lib/audit.mjs";
+import { clearFailures } from "./lib/page.mjs";
 
 const [file, ...rest] = process.argv.slice(2);
 if (!file) { console.log("usage: node tests/ui/run-steps.mjs <steps.json> [--device phone|small|desktop]"); process.exit(2); }
@@ -20,6 +21,7 @@ const spec = JSON.parse(readFileSync(file, "utf8"));
 const di = rest.indexOf("--device");
 const device = di >= 0 ? rest[di + 1] : spec.device || "phone";
 
+clearFailures();
 const server = await startServer();
 const browser = await launch();
 let failed = false;
@@ -43,11 +45,12 @@ try {
       else if (s.reload) await page.reload();
       else if ("offline" in s) await page.setOffline(s.offline);
       else if (s.sleep) await new Promise((r) => setTimeout(r, s.sleep));
-      else if (s.shot) console.log(`  shot ${await page.shot(s.shot, { full: !!s.full })}`);
+      else if (s.shot) console.log(`  shot ${await page.shot(`${s.shot}-${device}`, { full: !!s.full })}`);
       else if (s.eval) got = await page.eval(s.eval);
       else if (s.cortex) got = await page.cortex(...s.cortex);
       else if (s.mic) await page.eval((o) => window.__fakeMic.set(o), s.mic);
       else if (s.audit) { got = await page.eval(AUDIT); console.log(`  audit ${s.audit}: ${got.length ? got.join("; ") : "clean"}`); }
+      else throw new Error(`unknown step: ${Object.keys(s).join(", ")} (see the list at the top of run-steps.mjs)`);
       if ("expect" in s) {
         if (s.expect && typeof s.expect === "object") for (const k of Object.keys(s.expect)) assert.deepEqual(got?.[k], s.expect[k], `${k}`);
         else assert.deepEqual(got, s.expect);

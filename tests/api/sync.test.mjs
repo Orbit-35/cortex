@@ -41,7 +41,9 @@ test("last write wins: newer replaces, older and equal are ignored", async () =>
   const equal = await sync(srv, [{ ...e, value: 3, updated_at: "2026-11-20T12:05:00Z" }], newer.body.cursor);
   assert.deepEqual(equal.body.entries, [], "a retry (same time) sends nothing back");
   const older = await sync(srv, [{ ...e, value: 4, updated_at: "2026-11-20T12:01:00Z" }], newer.body.cursor);
-  assert.equal(find(older.body, e.client_id).value, 2, "an older edit gets the winner back (D52)");
+  const back = find(older.body, e.client_id);
+  assert.ok(back, "an older edit gets the winner back (D52): nothing came back");
+  assert.equal(back.value, 2, "an older edit gets the winner back (D52)");
 });
 
 test("a soft delete shows in pulls and is hidden from GET /api/entries", async () => {

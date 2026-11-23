@@ -25,7 +25,7 @@ test("log a workout and it reaches the server", async () => {
   assert.ok(local.find((e) => e.metric === "_workout" && e.client_id === set.data.workout), "and its workout");
 
   const status = await page.syncIdle();
-  assert.equal(status.pending, 0);
+  assert.equal(status.pending, 0, "outbox empty after sync");
   const server = await (await fetch(`${app.server.url}/api/entries?module=lifting&metric=bench_press`)).json();
   assert.equal(server.length, 1);
   assert.equal(server[0].client_id, set.client_id);

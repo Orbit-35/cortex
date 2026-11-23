@@ -28,13 +28,23 @@ for (const device of ["phone", "small"]) {
       await page.shot(`layout-${device}-${name}`);
       for (const p of await page.eval(AUDIT)) problems.push(`${name}: ${p}`);
     }
-    // Two sheets: an exercise's detail and the workout editor.
+    // Sheets: the workout editor, the exercise picker and settings.
     await page.goto("/lifting/#log");
     await page.waitFor(".wcard");
     await page.click(".wcard");
     await page.waitFor("#editor input");
     await page.shot(`layout-${device}-editor`);
     for (const p of await page.eval(AUDIT)) problems.push(`editor: ${p}`);
+    await page.click('#editor [data-act="addex"]');
+    await page.waitFor("#picker .pkitem");
+    await page.shot(`layout-${device}-picker`);
+    for (const p of await page.eval(AUDIT)) problems.push(`picker: ${p}`);
+    await page.goto("/lifting/#profile");
+    await page.waitFor("#gear");
+    await page.click("#gear");
+    await page.waitFor("#settings .wrap");
+    await page.shot(`layout-${device}-settings`);
+    for (const p of await page.eval(AUDIT)) problems.push(`settings: ${p}`);
     assert.deepEqual(problems, []);
   });
 }

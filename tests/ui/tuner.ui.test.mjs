@@ -6,6 +6,9 @@ import { useApp } from "./lib/harness.mjs";
 const app = useApp();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// "A<sub>2</sub>" -> "A2" (innerText puts the octave on its own line).
+const note = (page) => page.eval(() => document.getElementById("note").textContent);
+
 async function tuner({ freq = 110, deny = false } = {}) {
   const page = await app.device({ fakeMic: true });
   await page.send("Page.addScriptToEvaluateOnNewDocument", { source: `window.__fakeMic.set(${JSON.stringify({ freq, deny })})` });
@@ -14,17 +17,21 @@ async function tuner({ freq = 110, deny = false } = {}) {
   return page;
 }
 
-test("110 Hz on Standard reads A, in tune; 113 Hz reads sharp", async () => {
+test("110 Hz on Standard reads A2, in tune; 113 Hz reads sharp; 82.4 Hz reads E2", async () => {
   const page = await tuner({ freq: 110 });
   await page.waitFor(() => document.getElementById("stage").className.includes("state-in"), { timeout: 10000 });
-  assert.match(await page.text("#note"), /^A/);
+  assert.equal(await note(page), "A2", "note and octave");
   assert.match(await page.text("#status"), /In tune/);
   await page.shot("tuner-in-tune");
 
   await page.eval(() => window.__fakeMic.set({ freq: 113 }));
   await page.waitFor(() => /Tune down/.test(document.getElementById("status").innerText), { timeout: 10000 });
-  assert.match(await page.text("#note"), /^A/);
+  assert.equal(await note(page), "A2", "still A2 when sharp");
   assert.match(await page.text("#readout"), /\+\d+ cents/);
+
+  await page.eval(() => window.__fakeMic.set({ freq: 82.41 }));
+  await page.waitFor(() => document.getElementById("note").textContent === "E2", { timeout: 10000 });
+  await page.waitFor(() => document.getElementById("stage").className.includes("state-in"), { timeout: 10000 });
 });
 
 test("a blocked microphone shows the help message", async () => {

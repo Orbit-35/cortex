@@ -25,6 +25,7 @@ const GROUPS = {
 const REAL = join(ROOT, "cortex.db");
 const stamp = () => (existsSync(REAL) ? `${statSync(REAL).mtimeMs}:${statSync(REAL).size}` : "none");
 const before = stamp();
+if (!only || only === "ui") { const { clearFailures } = await import("./ui/lib/page.mjs"); clearFailures(); }
 
 const results = [];
 let failed = false;

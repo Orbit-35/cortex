@@ -46,6 +46,6 @@ test("server down: logs locally, syncs when the server comes back", async () => 
   await app.server.restart();
   page.offline = false;
   const up = await page.syncIdle();
-  assert.equal(up.pending, 0);
+  assert.equal(up.pending, 0, "outbox empty after the server came back");
   assert.equal(await onServer(), before + 1);
 });
