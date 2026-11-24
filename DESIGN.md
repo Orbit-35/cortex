@@ -148,7 +148,7 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 ### D25. Logging is per workout, saved as a whole
 - **Decision:** the Log tab starts a live workout (timer from the moment you start, sets ticked off), adds a past workout (date + duration in hours/minutes, stored at local noon per D20), or edits a saved one. All three use one editor working on a draft; Save/Finish writes the workout and all its sets in one IndexedDB transaction (`putEntries`). A live draft is kept in device storage until finished.
 - **Why:** you think in workouts, not loose sets. Saving as a whole means another device never sees half a workout, and the draft survives the phone killing the app mid-session. One editor for all three modes keeps them consistent.
-- **Trade-off:** a live workout isn't visible on other devices until finished, and is lost if the phone's site data is cleared mid-workout. Unticked sets are discarded on Finish (with a warning).
+- **Trade-off:** a live workout isn't visible on other devices until finished, and is lost if the phone's site data is cleared mid-workout. **Amended by D56:** the draft now reopens by itself and the browser is asked to keep the storage. Unticked sets are discarded on Finish (with a warning).
 
 ### D26. Pre-workout sets are grouped into one workout per day, deterministically
 - **Decision:** sets without `data.workout` (logged before D25) are attached to a workout with the id `workout:legacy:<YYYY-MM-DD>`, created if missing.
