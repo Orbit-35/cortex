@@ -324,7 +324,7 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 
 ### D56. A workout in progress can't be lost
 - **Decision:** builds on D25 (the live draft is in `localStorage`, saved on every change).
-  - **Reopens by itself:** whenever the Lifting app opens with a workout in progress (after a swipe-away, after Android closed it in the background, after an update), the editor opens straight to it. Back closes it to the tab in the URL. This replaces the one-off "reopen after an update" flag.
+  - **Reopens by itself:** whenever the Lifting app opens with a workout in progress (after a swipe-away, after Android closed it in the background, after an update), the editor opens straight to it. Back closes it to the tab in the URL. It waits for the first full data load, never covers a screen you already tapped open, and after a reload reuses the editor's Back step instead of adding a dead one. This replaces the one-off "reopen after an update" flag.
   - **Kept storage:** `core/cortex.js` asks the browser to keep the site's storage (`navigator.storage.persist()`) so Chrome doesn't clear it when the phone is low on space. The browser decides; installed apps are usually allowed.
   - **No silent failure:** if saving the draft fails (storage full or blocked), a toast says so once.
   - `tests/ui/lifting-live.ui.test.mjs` closes and reopens the app mid-workout and checks every value survives.

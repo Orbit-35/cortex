@@ -42,8 +42,10 @@ test("closing the app mid-workout loses nothing, and the workout reopens by itse
 
   // A reload (what an app update does) reopens it too, with a later change kept.
   await page.type(R(1), "4");
+  const steps = await page.eval(() => history.length);
   await page.reload();
   await page.waitFor(W(1));
+  assert.equal(await page.eval(() => history.length), steps, "a reload doesn't add a dead Back step");
   assert.equal(await val(page, R(1)), "4", "the last change before the reload was kept");
 
   // Back closes the editor; the workout is still in progress on the Log tab.
@@ -89,4 +91,24 @@ test("if the phone can't save the workout, it says so once instead of failing si
   await new Promise((r) => setTimeout(r, 300));
   const toasts = await page.eval(() => [...document.querySelectorAll(".cx-toast")].filter((t) => /Couldn't save/.test(t.innerText)).length);
   assert.ok(toasts <= 1, `warned once, not on every keystroke (${toasts})`);
+});
+
+test("a screen tapped open during startup isn't covered by the reopening workout", async () => {
+  let page = await app.device();
+  await page.goto("/lifting/");
+  await page.waitFor('[data-act="start"]');
+  await page.click('[data-act="start"]');
+  await page.waitFor("#editor");
+  page = await app.reopen(page);
+  // Tap the settings gear the instant it appears, before the first load finishes.
+  await page.send("Page.addScriptToEvaluateOnNewDocument", { source: `(() => {
+    const t = setInterval(() => { const g = document.getElementById("gear");
+      if (g && !g.hidden && g.innerHTML) { clearInterval(t); g.click(); } }, 0); })();` });
+  await page.goto("/lifting/#profile");
+  await page.waitFor("#settings .wrap");
+  await new Promise((r) => setTimeout(r, 800)); // past the first load
+  const shown = () => page.eval(() => ({ editor: !document.getElementById("editor").hidden, settings: !document.getElementById("settings").hidden }));
+  assert.deepEqual(await shown(), { editor: false, settings: true }, "settings stays on top, the workout waits");
+  await page.back();
+  assert.deepEqual(await shown(), { editor: false, settings: false }, "one Back closes settings");
 });

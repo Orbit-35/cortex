@@ -195,10 +195,11 @@ function editWorkout(id) {
 }
 
 // The editor is its own browser-history step, so the phone's back button closes it.
-function openEditor(draft, original) {
+// replace: reuse the current history step (a reload that reopens the live workout).
+function openEditor(draft, original, { replace = false } = {}) {
   if (!draft) return;
   editor = { draft, original, dirty: false, menu: null, notes: new Set(), setMenu: null, cueEdit: null };
-  history.pushState({ ui: "editor" }, "", location.hash);
+  history[replace ? "replaceState" : "pushState"]({ ui: "editor" }, "", location.hash);
   $("editor").hidden = false;
   $("editor").scrollTop = 0;
   document.body.style.overflow = "hidden";
@@ -1206,6 +1207,7 @@ async function refresh() {
   workouts = groupWorkouts(entries);
   lib = resolveExercises(entries.filter((e) => e.metric === EXERCISE));
   loaded = true;
+  reopenLive();
   try { prs = prEvents(workSets); } catch (err) { console.error("PR maths failed:", err); prs = new Map(); }
   if (!editor) render();
   if (!$("picker").hidden) renderPicker();
@@ -1223,17 +1225,26 @@ setInterval(() => {
   });
 }, 1000);
 
+// A workout in progress reopens right where it was whenever the app opens (D56): after a
+// swipe-away, after Android closed it in the background, or after an update. It waits for
+// the first full load (so the Previous column has data), once per page load, and never
+// covers something you already opened. After a reload the old editor history step is
+// reused, so Back doesn't collect dead steps.
+const reloadedStep = !!history.state?.ui;
+let reopenChecked = false;
+function reopenLive() {
+  if (reopenChecked) return;
+  reopenChecked = true;
+  const live = loadLive();
+  if (!live || editor || stack.length) return;
+  openEditor(live, null, { replace: reloadedStep && history.state === null });
+}
+
 cortex.onChange(refresh);
 if (history.state?.ui) history.replaceState(null, "", location.hash); // a reload closes any open editor
 showTab((location.hash || "#log").slice(1));
 // Sync starts even if drawing fails, so the outbox never gets stuck on the device.
-// A workout in progress reopens right where it was whenever the app opens (D56): after a
-// swipe-away, after Android closed it in the background, or after an update.
-refresh().catch((err) => console.error("refresh failed:", err)).finally(() => {
-  const live = loadLive();
-  if (live && !editor) openEditor(live, null);
-  cortex.startAutoSync();
-});
+refresh().catch((err) => { console.error("refresh failed:", err); reopenLive(); }).finally(() => cortex.startAutoSync());
 
 // The service worker keeps the app shell on the device so this page opens offline.
 // When a new version is installed (DESIGN D36) the page reloads itself into it, unless
