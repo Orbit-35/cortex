@@ -27,8 +27,17 @@ export function configure(options = {}) {
 
 // ---------- IndexedDB plumbing ----------
 
+// Ask the browser to keep this site's storage (IndexedDB and localStorage) even when the
+// phone runs low on space (D56). Installed apps are usually allowed; the browser decides.
+function keepStorage() {
+  try {
+    navigator.storage?.persisted?.().then((yes) => yes || navigator.storage.persist()).catch(() => {});
+  } catch {}
+}
+
 function openDb() {
   if (!dbPromise) {
+    keepStorage();
     dbPromise = new Promise((resolve, reject) => {
       const req = indexedDB.open(DB_NAME, DB_VERSION);
       req.onupgradeneeded = () => {

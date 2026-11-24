@@ -322,6 +322,15 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Why:** test agents were writing a new scratch driver for every change. A committed kit is faster, checks the same things every time, and can't touch the owner's data by mistake. Node 24 has WebSocket, fetch and a test runner built in, and the Python venv has no test packages, so nothing needs installing.
 - **Trade-off:** Chromium only, and a headless browser can't prove real-phone behaviour (keyboard, haptics, a real mic, installing). Those stay on the owner's phone checklist. UI tests take about a minute.
 
+### D56. A workout in progress can't be lost
+- **Decision:** builds on D25 (the live draft is in `localStorage`, saved on every change).
+  - **Reopens by itself:** whenever the Lifting app opens with a workout in progress (after a swipe-away, after Android closed it in the background, after an update), the editor opens straight to it. Back closes it to the tab in the URL. This replaces the one-off "reopen after an update" flag.
+  - **Kept storage:** `core/cortex.js` asks the browser to keep the site's storage (`navigator.storage.persist()`) so Chrome doesn't clear it when the phone is low on space. The browser decides; installed apps are usually allowed.
+  - **No silent failure:** if saving the draft fails (storage full or blocked), a toast says so once.
+  - `tests/ui/lifting-live.ui.test.mjs` closes and reopens the app mid-workout and checks every value survives.
+- **Why:** losing a half-logged workout is the owner's main complaint about other workout apps, which keep the draft only in memory.
+- **Trade-off:** opening the app always lands in the live workout until it's finished or cancelled. Still device-only: a wiped or dead phone loses the draft. A server backup of the draft is the planned next step.
+
 ## Security and hosting
 
 ### D16. No auth yet; tailnet only

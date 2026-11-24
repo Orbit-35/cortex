@@ -28,5 +28,11 @@ export function useApp({ seed } = {}) {
     app.open.push(page);
     return page;
   };
+  // The same device after the app was closed and opened again (see browser.reopen).
+  app.reopen = async (page) => {
+    const next = await app.browser.reopen(page);
+    app.open.push(next);
+    return next;
+  };
   return app;
 }

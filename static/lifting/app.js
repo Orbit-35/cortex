@@ -64,12 +64,18 @@ const ask = (title, body = "", ok = "Delete", danger = true, no = "Cancel") => u
 const toast = (text) => uiToast(text);
 const plural = (n, word) => `${n.toLocaleString()} ${word}${n === 1 ? "" : "s"}`;
 
-// The live workout draft lives in this device's storage until Finish (DESIGN D25).
+// The live workout draft lives in this device's storage until Finish (DESIGN D25), saved on
+// every change, so closing the app or the phone killing it loses nothing (D56).
 function loadLive() {
   try { return JSON.parse(localStorage.getItem(LIVE_KEY)); } catch { return null; }
 }
+let liveSaveWarned = false;
 function saveLive(draft) {
-  try { localStorage.setItem(LIVE_KEY, JSON.stringify(draft)); } catch (err) { console.warn(err); }
+  try { localStorage.setItem(LIVE_KEY, JSON.stringify(draft)); liveSaveWarned = false; } catch (err) {
+    console.warn(err);
+    // Say so once instead of failing silently: the owner should finish or note the workout.
+    if (!liveSaveWarned) { liveSaveWarned = true; toast("Couldn't save this workout on the phone. Finish it soon."); }
+  }
 }
 function clearLive() {
   try { localStorage.removeItem(LIVE_KEY); } catch {}
@@ -1221,12 +1227,18 @@ cortex.onChange(refresh);
 if (history.state?.ui) history.replaceState(null, "", location.hash); // a reload closes any open editor
 showTab((location.hash || "#log").slice(1));
 // Sync starts even if drawing fails, so the outbox never gets stuck on the device.
-refresh().catch((err) => console.error("refresh failed:", err)).finally(() => cortex.startAutoSync());
+// A workout in progress reopens right where it was whenever the app opens (D56): after a
+// swipe-away, after Android closed it in the background, or after an update.
+refresh().catch((err) => console.error("refresh failed:", err)).finally(() => {
+  const live = loadLive();
+  if (live && !editor) openEditor(live, null);
+  cortex.startAutoSync();
+});
 
 // The service worker keeps the app shell on the device so this page opens offline.
 // When a new version is installed (DESIGN D36) the page reloads itself into it, unless
 // you're mid-edit on a saved workout (then it waits). A live workout is safe in storage
-// and reopens after the reload.
+// and reopens after the reload, like any other time the app opens.
 if ("serviceWorker" in navigator) {
   const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("/sw.js").then((reg) => {
@@ -1239,13 +1251,6 @@ if ("serviceWorker" in navigator) {
     if (!hadController || reloading) return; // first install: this page is already current
     if (editor?.dirty && editor.draft.mode !== "live") { updateWaiting = true; toast("Update ready: it loads when you close this workout"); return; }
     reloading = true;
-    try { if (editor?.draft.mode === "live") sessionStorage.setItem("cortex.reopenLive", "1"); } catch {}
-    location.reload();
+    location.reload(); // a live workout reopens by itself (D56)
   });
 }
-try {
-  if (sessionStorage.getItem("cortex.reopenLive")) {
-    sessionStorage.removeItem("cortex.reopenLive");
-    refresh().then(() => { const live = loadLive(); if (live) openEditor(live, null); });
-  }
-} catch {}

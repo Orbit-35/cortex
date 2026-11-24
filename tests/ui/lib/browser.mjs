@@ -65,6 +65,18 @@ export async function launch({ headless = true } = {}) {
       pages.push(page);
       return page;
     },
+    // "Swipe the app away and open it again": a new tab on the same device (same storage and
+    // service worker), then the old tab is closed. Use the returned page from then on.
+    async reopen(old) {
+      const { targetId } = await cdp.send("Target.createTarget", { url: "about:blank", browserContextId: old.browserContextId });
+      await cdp.send("Target.closeTarget", { targetId: old.targetId });
+      const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
+      const page = new Page(browser, { sessionId, targetId, browserContextId: old.browserContextId,
+        device: old.device, base: old.base, fakeMic: old.fakeMic, keepServiceWorker: old.keepServiceWorker });
+      await page.init();
+      pages.push(page);
+      return page;
+    },
     async close() {
       try { await cdp.send("Browser.close"); } catch {}
       cdp.close();
