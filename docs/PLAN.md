@@ -122,10 +122,10 @@ The detailed plans were written separately. Where they overlap:
 These don't block Stage 0, Stage 1 or Stage 2.
 
 **Lifting, before Stage 3:**
-1. Remove the greyed "last time" hints in a live workout, now that there's no ticking? The Previous column fills a set with one tap. (Yes.)
-2. On Finish, mention sets that have a weight but no reps and so won't be saved? (Yes.)
-3. An Undo button after deleting a set? (Your call. Without it, a mis-swipe loses a typed set.)
-4. Keep "Superset with next" in the new ••• menu? (Yes, or supersets can't be made.)
+1. Remove the greyed "last time" hints in a live workout, now that there's no ticking? The Previous column fills a set with one tap. (Yes.) **Answered: yes.**
+2. On Finish, mention sets that have a weight but no reps and so won't be saved? (Yes.) **Answered: yes.**
+3. An Undo button after deleting a set? (Your call. Without it, a mis-swipe loses a typed set.) **On hold:** the owner likes the idea but isn't sure yet.
+4. Keep "Superset with next" in the new ••• menu? (Yes, or supersets can't be made.) **On hold:** ask again before building the ••• menu.
 
 **Lifting, Stage 5:**
 
