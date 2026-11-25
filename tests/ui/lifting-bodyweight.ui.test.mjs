@@ -66,3 +66,34 @@ test("chin-ups (never weighted): one Most reps view, no empty weight charts", as
   assert.ok(top.every((t) => !/\b0 (lb|kg)\b/.test(t)), top.join(" | "));
   await page.shot("bodyweight-progress", { full: true });
 });
+
+test("narrow phone: the chosen chart chip is scrolled into view", async () => {
+  const page = await app.device({ device: "small" });
+  await openEx(page, "pull_up");
+  await page.clickText("Most reps", "#exbody .chip");
+  const fits = await page.eval(() => {
+    const row = document.querySelector("#exbody .chips").getBoundingClientRect();
+    const on = document.querySelector("#exbody .chip.on").getBoundingClientRect();
+    return on.left >= row.left - 1 && on.right <= row.right + 1;
+  });
+  assert.ok(fits, "Most reps chip fully visible at 360 px");
+  await page.shot("bodyweight-small-chips");
+});
+
+test("bodyweight only: Progress shows no 0 lb volume or milestone", async () => {
+  const { startServer } = await import("../lib/server.mjs");
+  const { seedServer, workout, daysAgo } = await import("./lib/seed.mjs");
+  const server = await startServer();
+  try {
+    await seedServer(server, workout({ at: daysAgo(2), name: "Bars", sets: [["pull_up", null, 10], ["chin_up", null, 8]] }));
+    const page = await app.browser.newDevice({ base: server.url });
+    app.open.push(page);
+    await page.goto("/lifting/#progress");
+    await page.waitFor("#view-progress .tiles");
+    const text = await page.text("#view-progress");
+    assert.doesNotMatch(text, /\b0 (lb|kg)\b/, text.slice(0, 300));
+    assert.equal(await page.count("#view-progress .milestone"), 0, "no milestone card without weight");
+    assert.match(text, /18 reps/);
+    await page.shot("bodyweight-only-progress");
+  } finally { await server.stop(); }
+});

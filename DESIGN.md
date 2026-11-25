@@ -337,6 +337,7 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
   - **Exercise detail:** a "Most reps" chart and record (most reps in one bodyweight set per session) appears when an exercise has bodyweight sets. A never-weighted exercise shows only that view, with no chips. Weight charts appear only when there are weighted sets.
   - **Gains** ("+X since …") start at the first session that has the metric (`seriesGain` in `stats.js`), so a no-weight day is never the "0 lb" starting point for weight gains.
   - **Top lifts** on Progress show "N reps, most in a set" for an exercise with no weighted sets.
+  - **Progress totals:** with no weighted sets at all, Total volume shows "—" and the "You've lifted" milestone card is hidden.
 - **Why:** bodyweight work showed as "0 lb" and pull-up gains were measured from a no-weight day, which made the numbers look broken.
 - **Trade-off:** bodyweight volume isn't counted (it would need the owner's bodyweight, which comes with the Bodyweight tab). Weighted reps don't count toward "Most reps", because 5 reps with 10 kg isn't a bodyweight drop.
 

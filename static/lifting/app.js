@@ -743,13 +743,13 @@ function renderProgress() {
   el.innerHTML = `
     <div class="tiles">
       <div class="tile"><div class="k">Workouts</div><div class="v">${t.workouts.toLocaleString()}</div></div>
-      <div class="tile"><div class="k">Total volume</div><div class="v">${fmtBig(vol)} <small>${unit}</small></div></div>
+      <div class="tile"><div class="k">Total volume</div><div class="v">${vol ? `${fmtBig(vol)} <small>${unit}</small>` : "—"}</div></div>
       <div class="tile"><div class="k">PRs</div><div class="v">${prs.size.toLocaleString()}</div></div>
       <div class="tile"><div class="k">Time training</div><div class="v">${t.minutes ? fmtDuration(t.minutes) : "—"}</div></div>
     </div>
     <div class="muted small" style="margin-top:8px">${plural(t.sets, "set")} · ${plural(t.reps, "rep")}</div>
 
-    <div class="card milestone">
+    ${vol ? `<div class="card milestone">
       <div class="k">You've lifted</div>
       <div class="v">${fmtBig(vol)} ${unit}</div>
       ${ms.last ? `<div>That's <b>${fmtTimes(t.volumeKg / ms.last.kg)} × ${esc(ms.last.name)}</b> ${icon(ms.last.icon)}</div>` : ""}
@@ -758,7 +758,7 @@ function renderProgress() {
       ${ms.journey.length ? `<button class="ghost" data-act="journey" style="padding:0;margin-top:6px">${journeyOpen ? "Hide" : "See"} your journey ${icon(journeyOpen ? "chevron-up" : "chevron-down")}</button>` : ""}
       ${journeyOpen ? `<ul class="list journey">${ms.journey.map((o) =>
         `<li><span>${icon(o.icon)} ${esc(o.name)} <span class="muted small">${fmtBig(convert(o.kg, "kg", unit))} ${unit}</span></span><b>${fmtTimes(o.times)}×</b></li>`).join("")}</ul>` : ""}
-    </div>
+    </div>` : "" /* bodyweight only: no "You've lifted 0 lb" (D57) */}
 
     <h2>Muscles worked</h2>
     <div class="chips" role="group" aria-label="Time range">${Object.entries(RANGES).map(([k, [label]]) =>
@@ -910,6 +910,12 @@ function renderExerciseInto(el, key) {
     sub: metric === "volume" || m.reps ? plural(d.sets, "set") : d.best ? `${fmtW(d.best.weight)}×${d.best.reps}` : "",
   })).filter((p) => p.v > 0);
   drawChart(el.querySelector(".chart"), points, vUnit);
+  // On a narrow phone the last chip can sit past the edge: keep the chosen one in view.
+  const row = el.querySelector(".chips"), on = row?.querySelector(".chip.on");
+  if (on) {
+    const over = on.getBoundingClientRect().right - row.getBoundingClientRect().right + 16;
+    if (over > 0) row.scrollLeft += over;
+  }
 }
 
 let exsheetKey = null;
