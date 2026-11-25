@@ -73,18 +73,31 @@ export function prKind(newSet, previous) {
 }
 
 // One row per training day for an exercise, oldest first: best estimated 1RM, heaviest
-// weight, and total volume (weight × reps), all in kg. Feeds the exercise charts.
+// weight, and total volume (weight × reps), all in kg, plus the most reps in one set with
+// no added weight (bodyweight sets; a weighted day's 5 reps isn't a bodyweight drop). Feeds
+// the exercise charts.
 export function sessionSeries(entries) {
   const days = new Map();
   for (const e of entries) {
     const s = setOf(e);
     const key = dayKey(e.recorded_at);
-    const d = days.get(key) || { day: key, e1rm: 0, heaviest: 0, volume: 0, sets: 0, best: null };
+    const d = days.get(key) || { day: key, e1rm: 0, heaviest: 0, volume: 0, mostReps: 0, sets: 0, best: null };
     d.sets += 1;
+    if (!(s.weight > 0) && s.reps > d.mostReps) d.mostReps = s.reps;
     d.volume += s.weight * (s.reps || 0);
     if (s.weight > d.heaviest) d.heaviest = s.weight;
     if (s.e1rm > d.e1rm) { d.e1rm = s.e1rm; d.best = s; }
     days.set(key, d);
   }
   return [...days.values()].sort((a, b) => (a.day < b.day ? -1 : 1));
+}
+
+// The best session for one chart metric and how far it is above the first session that
+// has that metric at all. A bodyweight day (0 kg) is not a starting point for weight gains.
+export function seriesGain(series, metric) {
+  const has = series.filter((d) => d[metric] > 0);
+  if (!has.length) return { top: null, first: null, gain: 0 };
+  const top = has.reduce((a, d) => (d[metric] > a[metric] ? d : a), has[0]);
+  const first = has[0];
+  return { top, first, gain: top === first ? 0 : top[metric] - first[metric] };
 }

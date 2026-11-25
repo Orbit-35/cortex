@@ -331,6 +331,15 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Why:** losing a half-logged workout is the owner's main complaint about other workout apps, which keep the draft only in memory.
 - **Trade-off:** opening the app always lands in the live workout until it's finished or cancelled. Still device-only: a wiped or dead phone loses the draft. A server backup of the draft is the planned next step.
 
+### D57. Bodyweight sets get their own numbers
+- **Decision:** a set with no weight (pull-ups, chin-ups, dips without a belt) is a bodyweight set.
+  - **Workout cards:** volume counts weighted sets only. A workout with no weighted sets shows its total reps ("21 reps") instead of "0 lb".
+  - **Exercise detail:** a "Most reps" chart and record (most reps in one bodyweight set per session) appears when an exercise has bodyweight sets. A never-weighted exercise shows only that view, with no chips. Weight charts appear only when there are weighted sets.
+  - **Gains** ("+X since …") start at the first session that has the metric (`seriesGain` in `stats.js`), so a no-weight day is never the "0 lb" starting point for weight gains.
+  - **Top lifts** on Progress show "N reps, most in a set" for an exercise with no weighted sets.
+- **Why:** bodyweight work showed as "0 lb" and pull-up gains were measured from a no-weight day, which made the numbers look broken.
+- **Trade-off:** bodyweight volume isn't counted (it would need the owner's bodyweight, which comes with the Bodyweight tab). Weighted reps don't count toward "Most reps", because 5 reps with 10 kg isn't a bodyweight drop.
+
 ## Security and hosting
 
 ### D16. No auth yet; tailnet only

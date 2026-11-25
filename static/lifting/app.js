@@ -5,7 +5,7 @@ import * as cortex from "/core/cortex.js";
 import { ask as uiAsk, cancelAsk, noCallout, toast as uiToast } from "/core/ui.js";
 import { lineChart, chartDots } from "/core/chart.js";
 import { icon } from "/core/icons.js";
-import { e1rm, dayKey, personalRecords, prKind, sessionSeries } from "/lifting/stats.js";
+import { e1rm, dayKey, personalRecords, prKind, sessionSeries, seriesGain } from "/lifting/stats.js";
 import { convert, showWeight, parseWeight, fmtNum } from "/lifting/units.js";
 import { MUSCLES, resolveExercises, exerciseFor, exerciseId, newKey } from "/lifting/library.js";
 import {
@@ -35,7 +35,7 @@ let unit = "lb";         // display unit (setting)
 let tab = "log";
 let historyShown = 40;
 let prs = new Map();     // set id -> "e1rm" | "reps" for every set that was a PR
-let chartMetric = "e1rm"; // which line the exercise charts show: e1rm | heaviest | volume
+let chartMetric = "e1rm"; // which line the exercise charts show: e1rm | heaviest | volume | mostReps
 let editor = null;       // { draft, original, dirty, menu, notes:Set, setMenu, cueEdit }
 
 // ---------- Small helpers ----------
@@ -144,7 +144,10 @@ function renderLog() {
       if (m !== month) { html += `<h2>${esc(m)}</h2>`; month = m; }
       const all = w.exercises.flatMap((x) => x.sets).filter(isWorking);
       const nPr = all.filter((s) => prs.has(s.client_id)).length;
-      const meta = [fmtDuration(w.duration_min), all.length ? `${Math.round(convert(volumeKg(all), "kg", unit)).toLocaleString()} ${unit}` : "", plural(all.length, "set")]
+      // Volume counts weighted sets; a bodyweight-only workout shows its reps instead of "0 lb" (D57).
+      const vol = Math.round(convert(volumeKg(all), "kg", unit));
+      const reps = all.reduce((n, s) => n + (Number(s.data?.reps) || 0), 0);
+      const meta = [fmtDuration(w.duration_min), vol ? `${vol.toLocaleString()} ${unit}` : reps ? plural(reps, "rep") : "", plural(all.length, "set")]
         .filter(Boolean).map(esc).concat(nPr ? [`<span class="pr-tag">${icon("trophy")} ${nPr} PR${nPr > 1 ? "s" : ""}</span>`] : []).join(" · ");
       html += `<button class="card wcard" data-act="open" data-id="${esc(w.id)}">
         <div class="head"><span class="name">${esc(w.name)}</span><span class="muted small">${esc(fmtDate(w.start))}</span></div>
@@ -731,8 +734,10 @@ function renderProgress() {
   const sessionsByKey = new Map();
   for (const w of workouts) for (const x of w.exercises) if (x.sets.length) sessionsByKey.set(x.key, (sessionsByKey.get(x.key) || 0) + 1);
   const top = [...sessionsByKey.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([key, n]) => {
-    const { best } = personalRecords(workSets.filter((s) => s.metric === key));
-    return { key, n, best };
+    const mine = workSets.filter((s) => s.metric === key);
+    const { best } = personalRecords(mine);
+    const mostReps = Math.max(0, ...mine.filter((s) => !(s.value > 0)).map((s) => Number(s.data?.reps) || 0));
+    return { key, n, best, mostReps };
   });
 
   el.innerHTML = `
@@ -767,7 +772,8 @@ function renderProgress() {
     <h2>Top lifts</h2>
     <ul class="list">${top.map((x) => `<li><button class="rowbtn" data-key="${esc(x.key)}">
       <span>${esc(exName(x.key))}<br><span class="muted small">${plural(x.n, "session")}</span></span>
-      <span class="val">${x.best ? `${fmtW(x.best.e1rm)} ${unit}<br><span class="muted small">est. 1RM</span>` : ""}</span></button></li>`).join("")}</ul>`;
+      <span class="val">${x.best ? `${fmtW(x.best.e1rm)} ${unit}<br><span class="muted small">est. 1RM</span>`
+        : x.mostReps ? `${fmtNum(x.mostReps)} reps<br><span class="muted small">most in a set</span>` : ""}</span></button></li>`).join("")}</ul>`;
 }
 
 // 2.2 -> "2.2", 1234.5 -> "1,235", 0.4 -> "0.4"
@@ -839,6 +845,7 @@ const METRICS = {
   e1rm: { label: "Est. 1RM", hero: "best estimated 1RM" },
   heaviest: { label: "Heaviest", hero: "heaviest weight" },
   volume: { label: "Volume", hero: "best session volume" },
+  mostReps: { label: "Most reps", hero: "most reps in a set", reps: true }, // bodyweight sets (D57)
 };
 
 // Everything about one exercise: a per-session chart (est. 1RM, heaviest or volume),
@@ -849,23 +856,31 @@ function renderExerciseInto(el, key) {
   if (!mine.length) { el.innerHTML = `${cue ? `<div class="cue static">${icon("pin")} ${esc(cue)}</div>` : ""}<p class="empty">No sets of ${esc(exName(key))} yet.</p>`; return; }
   const series = sessionSeries(mine);
   const { best, reps } = personalRecords(mine);
-  const top = series.reduce((a, d) => (d[chartMetric] > a[chartMetric] ? d : a), series[0]);
-  const first = series[0];
-  const gain = series.length > 1 ? top[chartMetric] - first[chartMetric] : 0;
+  // Weight charts need weighted sets; "Most reps" is offered when there are bodyweight sets.
+  // A pure bodyweight exercise (pull-ups with no belt) shows only that one.
+  const weighted = mine.some((s) => s.value > 0), bodyweight = mine.some((s) => !(s.value > 0));
+  const shown = Object.keys(METRICS).filter((k) => (k === "mostReps" ? bodyweight : weighted));
+  const metric = shown.includes(chartMetric) ? chartMetric : shown[0];
+  const m = METRICS[metric];
+  const fmtV = (v) => (m.reps ? fmtNum(v) : fmtW(v));
+  const vUnit = m.reps ? "reps" : unit;
+  const { top, first, gain } = seriesGain(series, metric);
+  const mostReps = Math.max(0, ...series.map((d) => d.mostReps));
   const sessions = workouts.filter((w) => w.exercises.some((x) => x.key === key && x.sets.length));
 
   el.innerHTML = `${cue ? `<div class="cue static">${icon("pin")} ${esc(cue)}</div>` : ""}
-    <div class="chips" role="group" aria-label="Chart">${Object.entries(METRICS).map(([k, m]) =>
-      `<button class="chip${k === chartMetric ? " on" : ""}" data-metric="${k}">${m.label}</button>`).join("")}</div>
+    ${shown.length > 1 ? `<div class="chips" role="group" aria-label="Chart">${shown.map((k) =>
+      `<button class="chip${k === metric ? " on" : ""}" data-metric="${k}">${METRICS[k].label}</button>`).join("")}</div>` : ""}
     <div class="hero">
-      <div class="label">${esc(exName(key))} · ${METRICS[chartMetric].hero}</div>
-      <div class="big">${top[chartMetric] ? fmtW(top[chartMetric]) : "—"} <small>${unit}</small></div>
-      <div class="sub">${esc(fmtDayKey(top.day))}${gain > 0 ? ` · +${fmtW(gain)} ${unit} since ${esc(fmtDayKey(first.day))}` : ""}</div>
+      <div class="label">${esc(exName(key))} · ${m.hero}</div>
+      <div class="big">${top ? fmtV(top[metric]) : "—"} <small>${vUnit}</small></div>
+      <div class="sub">${top ? esc(fmtDayKey(top.day)) : ""}${gain > 0 ? ` · +${fmtV(gain)} ${vUnit} since ${esc(fmtDayKey(first.day))}` : ""}</div>
     </div>
     <div class="chart"></div>
     <h2>Records</h2>
     <ul class="list">
       ${best ? `<li><span>Best est. 1RM</span><span>${fmtW(best.e1rm)} ${unit} <span class="muted small">(${fmtW(best.weight)} × ${best.reps})</span></span></li>` : ""}
+      ${bodyweight && mostReps ? `<li><span>Most reps in a set</span><span>${fmtNum(mostReps)}</span></li>` : ""}
       <li><span>Sessions · sets</span><span>${series.length} · ${mine.length}</span></li>
     </ul>
     ${reps.length ? `<h2>Rep records</h2>
@@ -891,10 +906,10 @@ function renderExerciseInto(el, key) {
     }).join("")}`;
 
   const points = series.map((d) => ({
-    day: d.day, v: convert(d[chartMetric], "kg", unit),
-    sub: chartMetric === "volume" ? plural(d.sets, "set") : d.best ? `${fmtW(d.best.weight)}×${d.best.reps}` : "",
+    day: d.day, v: m.reps ? d[metric] : convert(d[metric], "kg", unit),
+    sub: metric === "volume" || m.reps ? plural(d.sets, "set") : d.best ? `${fmtW(d.best.weight)}×${d.best.reps}` : "",
   })).filter((p) => p.v > 0);
-  drawChart(el.querySelector(".chart"), points);
+  drawChart(el.querySelector(".chart"), points, vUnit);
 }
 
 let exsheetKey = null;
@@ -921,7 +936,7 @@ $("exsheet").addEventListener("click", (ev) => {
 
 // Hand-drawn SVG line chart (DESIGN D19): one point per session, x = real time.
 // points: [{ day: "YYYY-MM-DD", v: number in display unit, sub: extra tooltip text }]
-function drawChart(el, points) {
+function drawChart(el, points, vUnit = unit) {
   if (!points.length) {
     el.innerHTML = `<p class="empty">No data for this chart yet.</p>`;
     return;
@@ -949,7 +964,7 @@ function drawChart(el, points) {
     cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("visibility", "visible");
     focus.setAttribute("cx", cx); focus.setAttribute("cy", cy); focus.setAttribute("visibility", "visible");
     const d = points[i];
-    tip.innerHTML = `<b>${r1(d.v)} ${unit}</b> <span>· ${esc(d.sub)}${d.sub ? " · " : ""}${esc(fmtDayKey(d.day))}</span>`;
+    tip.innerHTML = `<b>${r1(d.v)} ${esc(vUnit)}</b> <span>· ${esc(d.sub)}${d.sub ? " · " : ""}${esc(fmtDayKey(d.day))}</span>`;
     tip.hidden = false;
     const left = cx * (r.width / W);
     tip.style.left = `${Math.min(Math.max(left, tip.offsetWidth / 2), r.width - tip.offsetWidth / 2)}px`;

@@ -45,6 +45,13 @@ export const SEEDS = {
     ...workout({ at: daysAgo(3), name: "Push day", sets: [["bench_press", 80, 5], ["bench_press", 80, 5], ["overhead_press", 40, 8]] }),
     ...workout({ at: daysAgo(1), name: "Pull day", sets: [["deadlift", 120, 5], ["barbell_row", 60, 8]] }),
   ]),
+  // Bodyweight work (D57): pull-ups with no weight, then once with 10 kg, and chin-ups that
+  // never have weight. Bodyweight sets have value null.
+  bodyweight: (server) => seedServer(server, [
+    ...workout({ at: daysAgo(6), name: "Back day", sets: [["pull_up", null, 8], ["pull_up", null, 10], ["chin_up", null, 6]] }),
+    ...workout({ at: daysAgo(3), name: "Weighted", sets: [["pull_up", 10, 5], ["pull_up", 10, 4]] }),
+    ...workout({ at: daysAgo(1), name: "Back day", sets: [["pull_up", null, 12], ["chin_up", null, 9]] }),
+  ]),
   // About two months of training, so charts and Progress have something to show.
   history: (server) => seedServer(server, Array.from({ length: 16 }, (_, i) => workout({
     at: daysAgo(60 - i * 4), name: i % 2 ? "Pull day" : "Push day",

@@ -39,7 +39,29 @@ import { sessionSeries } from "../static/lifting/stats.js";
 const series = sessionSeries(sets);
 assert.deepEqual(series.map((d) => [d.heaviest, d.volume, d.sets]), [[70, 830, 2], [80, 465, 2], [85, 85, 1]]);
 assert.equal(series[0].best.weight, 70);
+assert.deepEqual(series.map((d) => d.mostReps), [0, 0, 0], "most reps counts bodyweight sets only");
 console.log("sessionSeries: ok");
+
+// Gains start from the first session that has the metric: a no-weight pull-up day doesn't
+// count as "0 kg" for weight gains, but does count for most reps.
+{
+  const { seriesGain } = await import("../static/lifting/stats.js");
+  const pull = [
+    { value: null, unit: "kg", data: { reps: 8 }, recorded_at: t(1, 10) },
+    { value: 10, unit: "kg", data: { reps: 5 }, recorded_at: t(2, 10) },
+    { value: 15, unit: "kg", data: { reps: 5 }, recorded_at: t(3, 10) },
+    { value: null, unit: "kg", data: { reps: 12 }, recorded_at: t(4, 10) },
+  ];
+  const s = sessionSeries(pull);
+  const h = seriesGain(s, "heaviest");
+  assert.equal(h.first.heaviest, 10, "weight gains start at the first weighted day");
+  assert.equal(h.gain, 5);
+  const r = seriesGain(s, "mostReps");
+  assert.deepEqual([r.first.mostReps, r.top.mostReps, r.gain], [8, 12, 4]);
+  assert.deepEqual(seriesGain(sessionSeries([pull[0]]), "e1rm"), { top: null, first: null, gain: 0 }, "bodyweight only: no weight numbers");
+  assert.equal(seriesGain(sessionSeries([pull[1]]), "heaviest").gain, 0, "one session: no gain");
+  console.log("seriesGain: ok");
+}
 
 // Bodyweight sets (no weight) before a weighted one: no crash, and no PR (bug audit H1).
 {
