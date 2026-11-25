@@ -49,6 +49,9 @@ Effort: S = under an hour or two, M = about half a day, L = a day or more.
 - **Then:** move the data from Chrome (sync first), and work through the phone checklist.
 - **Result:** the tuner's mic works in the app, which asks for permission each time as you want.
 
+### Next up: sync errors are never silent (S–M)
+Planned with the owner for the next session. Today a server-refused entry disappears from the outbox with only a console warning, and a refused delete is lost for good. Plan and findings: [plans/sync-errors.md](plans/sync-errors.md).
+
 ### Stage 3: lifting editor (M–L each)
 5. No ticking. PRs show as a trophy while typing, and a summary appears after Finish (**push first**).
 6. The ••• button opens a small popup menu.
