@@ -214,7 +214,23 @@ class SyncEntry(EntryBase):
     @field_validator("recorded_at", "updated_at", "deleted_at")
     @classmethod
     def _canonical_time(cls, v: str | None) -> str | None:
-        return to_utc_iso(v) if v else None
+        # An empty string is not "no time": a blank updated_at used to be saved as NULL and
+        # then broke every later pull (DESIGN D58). Only deleted_at may be absent (None).
+        if v is None:
+            return None
+        if not v.strip():
+            raise ValueError("empty time")
+        return to_utc_iso(v)
+
+
+def reject_reason(err: ValidationError) -> str:
+    """A short, human reason for the first problem, e.g. 'recorded_at: bad date'."""
+    first = err.errors()[0]
+    field = ".".join(str(p) for p in first.get("loc", ())) or "entry"
+    msg = first.get("msg", "invalid").removeprefix("Value error, ")
+    if "isoformat" in msg.lower() or "invalid isoformat" in msg.lower():
+        msg = "bad date"
+    return f"{field}: {msg}"
 
 
 class SyncIn(BaseModel):
@@ -228,6 +244,9 @@ class SyncOut(BaseModel):
     cursor: int
     entries: list[Entry]
     rejected: list[str] = Field(default_factory=list, description="client_ids the server refused")
+    rejected_reasons: dict[str, str] = Field(
+        default_factory=dict, description="client_id -> why it was refused (DESIGN D58)"
+    )
 
 
 def row_to_entry(row: sqlite3.Row) -> Entry:
@@ -244,12 +263,18 @@ def sync(body: SyncIn):
     twice (e.g. the reply got lost) changes nothing the second time.
     """
     rejected: list[str] = []
+    reasons: dict[str, str] = {}
+
+    def refuse(cid: str, why: str) -> None:
+        rejected.append(cid)
+        reasons[cid] = why
+
     valid: list[SyncEntry] = []
     for raw in body.entries:
         try:
             valid.append(SyncEntry.model_validate(raw))
-        except ValidationError:
-            rejected.append(str(raw.get("client_id", "")))
+        except ValidationError as err:
+            refuse(str(raw.get("client_id", "")), reject_reason(err))
     losers: list[str] = []  # older edits we ignored: the sender gets our version back
     with write_tx() as conn:
         rev = next_rev(conn)
@@ -257,7 +282,7 @@ def sync(body: SyncIn):
             existing = conn.execute(
                 "SELECT updated_at FROM entries WHERE client_id = ?", (e.client_id,)
             ).fetchone()
-            if existing and e.updated_at <= existing["updated_at"]:
+            if existing and existing["updated_at"] and e.updated_at <= existing["updated_at"]:
                 # A retry (same time), or an older edit than ours: last write wins.
                 if e.updated_at < existing["updated_at"]:
                     losers.append(e.client_id)
@@ -282,8 +307,11 @@ def sync(body: SyncIn):
                         fields + (e.client_id, now_iso()),
                     )
                 rev += 1
-            except sqlite3.IntegrityError:
-                rejected.append(e.client_id)  # clashes with UNIQUE(source, external_id)
+            except sqlite3.IntegrityError as err:
+                # Usually UNIQUE(source, external_id): the same imported row under another id.
+                dup = "UNIQUE" in str(err)
+                refuse(e.client_id, "duplicate import (this source and external_id already exist)"
+                       if dup else f"database refused it: {err}")
         cursor = rev - 1
         # A cursor ahead of ours means the server database was replaced: resend everything.
         since = body.since if body.since <= cursor else 0
@@ -295,7 +323,8 @@ def sync(body: SyncIn):
             if cid not in sent:
                 rows.append(conn.execute("SELECT * FROM entries WHERE client_id = ?", (cid,)).fetchone())
                 sent.add(cid)
-    return SyncOut(cursor=cursor, entries=[row_to_entry(r) for r in rows], rejected=rejected)
+    return SyncOut(cursor=cursor, entries=[row_to_entry(r) for r in rows],
+                   rejected=rejected, rejected_reasons=reasons)
 
 
 @app.post("/api/entries", response_model=Entry, status_code=201)

@@ -341,6 +341,11 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 - **Why:** bodyweight work showed as "0 lb" and pull-up gains were measured from a no-weight day, which made the numbers look broken.
 - **Trade-off:** bodyweight volume isn't counted (it would need the owner's bodyweight, which comes with the Bodyweight tab). Weighted reps don't count toward "Most reps", because 5 reps with 10 kg isn't a bodyweight drop.
 
+### D58. Sync errors are never silent
+- **Decision (server):** `/api/sync` returns `rejected_reasons` (`client_id` → a short reason such as "recorded_at: bad date" or "duplicate import") next to `rejected`. A blank `recorded_at`, `updated_at` or `deleted_at` is refused: before, a blank `updated_at` was saved as NULL and made every later pull fail with a 500.
+- **Why:** a refused entry used to vanish from the outbox with only a console warning, and a refused delete was lost for good (plan and findings: `docs/plans/sync-errors.md`).
+- **Trade-off:** none so far; the reply shape only gains a field, so older clients keep working.
+
 ## Security and hosting
 
 ### D16. No auth yet; tailnet only

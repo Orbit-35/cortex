@@ -110,3 +110,28 @@ test("20 concurrent pushes get unique, gap-free revs", async () => {
   assert.equal(conc.length, 20);
   assert.equal(after.body.cursor - start, 20, "revs have no gaps");
 });
+
+// DESIGN D58: refusals carry a reason, and blank times are refused instead of being saved
+// as NULL (which used to make every later pull fail with a 500).
+test("blank times are refused with a reason, and pulls keep working", async () => {
+  const blankUpd = E({ updated_at: "" }), blankRec = E({ recorded_at: "" }), blankDel = E({ deleted_at: "" });
+  const badDate = E({ recorded_at: "not-a-date" }), good = E();
+  const r = await sync(srv, [blankUpd, blankRec, blankDel, badDate, good], 0);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.rejected.sort(), [blankUpd, blankRec, blankDel, badDate].map((e) => e.client_id).sort());
+  assert.match(r.body.rejected_reasons[blankUpd.client_id], /updated_at: empty time/);
+  assert.match(r.body.rejected_reasons[badDate.client_id], /recorded_at: bad date/);
+  assert.ok(find(r.body, good.client_id), "the good one is saved");
+  const full = await sync(srv, [], 0);
+  assert.equal(full.status, 200, "a full pull still works");
+  assert.ok(!find(full.body, blankUpd.client_id), "nothing blank was saved");
+});
+
+test("a duplicate import is refused with its reason", async () => {
+  const first = E({ source: "reason_import", external_id: "row-1" });
+  await sync(srv, [first], 0);
+  const again = E({ source: "reason_import", external_id: "row-1" });
+  const r = await sync(srv, [again], 0);
+  assert.deepEqual(r.body.rejected, [again.client_id]);
+  assert.match(r.body.rejected_reasons[again.client_id], /duplicate import/);
+});
