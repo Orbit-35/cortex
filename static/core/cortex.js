@@ -182,10 +182,43 @@ export async function listMetrics(module) {
 
 // ---------- Sync ----------
 
+// pending: waiting to upload. rejected: the server refused them (DESIGN D58); they stay on
+// this device and are listed by listRejected() until they're fixed or tried again.
 export async function getStatus() {
   const db = await openDb();
-  const pending = await done(db.transaction("outbox").objectStore("outbox").count());
-  return { pending, online: lastSyncOk, syncing: !!syncing };
+  const t = db.transaction(["outbox", "meta"]);
+  const [pending, rejected] = await Promise.all([
+    done(t.objectStore("outbox").count()),
+    done(t.objectStore("meta").get("rejected")),
+  ]);
+  return { pending, rejected: Object.keys(rejected || {}).length, online: lastSyncOk, syncing: !!syncing };
+}
+
+// What the server refused: [{ client_id, reason, at, entry }], newest first.
+export async function listRejected() {
+  const db = await openDb();
+  const map = (await done(db.transaction("meta").objectStore("meta").get("rejected"))) || {};
+  return Object.entries(map).map(([client_id, r]) => ({ client_id, ...r }))
+    .sort((a, b) => (a.at < b.at ? 1 : -1));
+}
+
+// Send every refused entry again (e.g. after an update that fixed the server's rules).
+// An entry edited since it was refused is already queued with its newer version.
+export async function retryRejected() {
+  await tx(["entries", "outbox", "meta"], "readwrite", (t) => {
+    const meta = t.objectStore("meta"), outbox = t.objectStore("outbox"), entries = t.objectStore("entries");
+    meta.get("rejected").onsuccess = (ev) => {
+      for (const [id, r] of Object.entries(ev.target.result || {})) {
+        entries.get(id).onsuccess = (e) => {
+          const cur = e.target.result;
+          if (!cur || cur.updated_at === r.entry.updated_at) outbox.put(r.entry);
+        };
+      }
+      meta.delete("rejected");
+    };
+  });
+  changed();
+  return sync();
 }
 
 // Subscribe to "something changed" (local write or sync). Returns an unsubscribe function.
@@ -242,31 +275,45 @@ async function syncOnce() {
   } finally {
     clearTimeout(timer);
   }
-  if (reply.rejected.length) console.warn("Cortex: server rejected entries", reply.rejected);
+  const refused = new Set(reply.rejected || []);
+  if (refused.size) console.warn("Cortex: server rejected entries", reply.rejected_reasons || reply.rejected);
 
   // Apply the reply in one transaction, so a crash can't leave us half-synced.
   await tx(["entries", "outbox", "meta"], "readwrite", (t) => {
     const entries = t.objectStore("entries");
     const outbox = t.objectStore("outbox");
-    outbox.getAll().onsuccess = (ev) => {
+    const meta = t.objectStore("meta");
+    meta.get("rejected").onsuccess = (mv) => outbox.getAll().onsuccess = (ev) => {
+      const rejected = mv.target.result || {};
       const pending = new Map(ev.target.result.map((e) => [e.client_id, e]));
-      // 1. The server has what we sent: clear it from the outbox, unless it was
+      // 1. The server answered what we sent: clear it from the outbox, unless it was
       //    edited again while the request was in the air (then it stays queued).
       for (const sent of batch) {
-        const now = pending.get(sent.client_id);
+        const id = sent.client_id, now = pending.get(id);
+        if (refused.has(id)) {
+          // Refused (D58): remember it, with the reason, instead of forgetting it. Keep the
+          // local copy as it is, even a delete marker: dropping it would lose the delete.
+          rejected[id] = { reason: reply.rejected_reasons?.[id] || "refused by the server", at: nowIso(), entry: sent };
+        } else {
+          delete rejected[id]; // accepted: a fix (or a retry) cleared it
+        }
         if (now && now.updated_at === sent.updated_at) {
-          outbox.delete(sent.client_id);
-          pending.delete(sent.client_id);
-          if (sent.deleted_at) entries.delete(sent.client_id); // marker has done its job
+          outbox.delete(id);
+          pending.delete(id);
+          if (sent.deleted_at && !refused.has(id)) entries.delete(id); // marker has done its job
         }
       }
       // 2. Take the server's changes, except where we still have an unsent edit.
       for (const remote of reply.entries) {
         if (pending.has(remote.client_id)) continue;
+        // A newer version from another device replaces a refused edit: nothing left to fix.
+        const r = rejected[remote.client_id];
+        if (r && remote.updated_at > r.entry.updated_at) delete rejected[remote.client_id];
         if (remote.deleted_at) entries.delete(remote.client_id);
         else entries.put(remote);
       }
-      t.objectStore("meta").put(reply.cursor, "cursor");
+      if (Object.keys(rejected).length) meta.put(rejected, "rejected"); else meta.delete("rejected");
+      meta.put(reply.cursor, "cursor");
     };
   });
   return more;
