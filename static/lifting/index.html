@@ -49,6 +49,8 @@
   .sync::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
   .sync.ok::before { background: var(--good); }
   .sync.pending::before { background: var(--warn); }
+  .sync.bad::before { background: var(--danger); }
+  .syncbad { background: none; border: 0; padding: 0 4px; min-height: 44px; min-width: 40px; color: var(--danger); font: inherit; font-weight: 600; cursor: pointer; }
 
   nav.tabbar {
     position: fixed; inset: auto 0 0 0; z-index: 10; background: var(--card);

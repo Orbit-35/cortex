@@ -22,7 +22,7 @@ You are a test agent for Cortex, a local-first FastAPI + SQLite web app in this 
 4. **Open the screenshots** in `tests/ui/out/` and look at them: overflow, clipped or wrapped text, tap targets under 44 px, the pink accent (#ff2e88), no emoji. Failures save `FAIL-*.png` and `.html` there too.
 
 ## Good to know
-- A healthy full run takes about 80-90 s and ends with `N/N files passed. All good.` (17 files as of D57) Much slower, or fewer files, means something is wrong.
+- A healthy full run takes about 80-90 s and ends with `N/N files passed. All good.` (19 files as of D58) Much slower, or fewer files, means something is wrong.
 - `--grep` matches anywhere in the file path, so `--grep ui` or `--grep tests` selects everything. Use a file name word (`tuner`, `layout`).
 - Step files: an unknown step key fails the run. Screenshot names get the device added (`smoke-log-small.png`), so runs on different devices don't overwrite each other.
 - `FAIL-*` files in `tests/ui/out/` are cleared at the start of each run; anything else there may be from an older run, so check the timestamps.

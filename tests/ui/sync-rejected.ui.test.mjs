@@ -106,3 +106,34 @@ test("the same imported row on two devices: the second is refused as a duplicate
   assert.equal(s.rejected, 1);
   assert.match((await b.cortex("listRejected"))[0].reason, /duplicate import/);
 });
+
+test("the pill shows 'N not synced'; tapping it explains and offers Try again", async () => {
+  const { AUDIT } = await import("./lib/audit.mjs");
+  for (const size of ["phone", "small"]) {
+    const page = await app.device({ device: size });
+    await page.goto("/lifting/");
+    await page.waitFor('[data-act="start"]');
+    const bad = good({ recorded_at: "not-a-date" });
+    await inject(page, bad);
+    await page.syncIdle();
+    await page.waitFor("#sync .syncbad");
+    assert.equal(await page.text("#sync"), "1 not synced");
+    assert.equal(await page.eval(() => document.getElementById("sync").className), "sync bad");
+    assert.deepEqual(await page.eval(AUDIT), [], "header still passes the layout check");
+    await page.shot(`sync-bad-${size}`);
+
+    await page.click("#sync .syncbad");
+    await page.waitFor(".cx-ask-box");
+    const box = await page.text(".cx-ask-box");
+    assert.match(box, /1 change not saved on your PC/);
+    assert.match(box, /recorded_at: bad date/);
+    assert.match(box, /still on this phone/);
+    await page.shot(`sync-bad-dialog-${size}`);
+    await page.clickText("Try again", ".cx-ask-box button");
+    await page.waitFor(() => /Still refused: 1 change/.test(document.querySelector(".cx-toast")?.innerText || ""));
+
+    await page.cortex("putEntries", [{ ...bad, recorded_at: "2026-11-20T10:00:00.000Z" }]);
+    await page.syncIdle();
+    await page.waitFor(() => document.getElementById("sync").innerText === "synced");
+  }
+});

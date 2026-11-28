@@ -1203,12 +1203,32 @@ $("settings").addEventListener("click", async (ev) => {
 // ---------- Data loading ----------
 
 async function showSync() {
-  const { pending, online } = await cortex.getStatus();
+  const { pending, rejected, online } = await cortex.getStatus();
   const el = $("sync");
-  if (pending > 0) { el.textContent = `${pending} pending`; el.className = "sync pending"; }
+  // Refused by the server (D58) beats everything else: it won't fix itself, so it's a button.
+  if (rejected > 0) { el.innerHTML = `<button class="syncbad" data-act="syncbad">${rejected} not synced</button>`; el.className = "sync bad"; }
+  else if (pending > 0) { el.textContent = `${pending} pending`; el.className = "sync pending"; }
   else if (online) { el.textContent = "synced"; el.className = "sync ok"; }
   else { el.textContent = online === false ? "offline" : ""; el.className = "sync"; }
 }
+
+// Tapping "N not synced": say what happened in plain words and offer to try again.
+$("sync").addEventListener("click", async (ev) => {
+  if (!ev.target.closest("[data-act=syncbad]")) return;
+  const list = await cortex.listRejected();
+  if (!list.length) { showSync(); return; }
+  const n = list.length, what = n === 1 ? "1 change" : `${n} changes`;
+  const reasons = [...new Set(list.map((r) => r.reason))].slice(0, 3).join("; ");
+  const again = await ask(`${what} not saved on your PC`,
+    `Your PC refused ${n === 1 ? "it" : "them"} (${reasons}). ${n === 1 ? "It's" : "They're"} still on this phone. ` +
+    `Try again sends ${n === 1 ? "it" : "them"} once more; if that fails too, the app needs a fix.`,
+    "Try again", false, "Close");
+  if (!again) return;
+  const ok = await cortex.retryRejected();
+  const { rejected } = await cortex.getStatus();
+  toast(!ok ? "Couldn't reach your PC. Try again when you're online." : rejected ? `Still refused: ${plural(rejected, "change")}` : "All synced");
+  showSync();
+});
 
 let migrationFailed = false; // tried once this page load and refused: don't retry on every refresh
 let migrating = false;
