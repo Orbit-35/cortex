@@ -148,3 +148,34 @@ test("the server and the device's own check agree on every case (D58)", async ()
     assert.equal(checkEntry(e) === null, ok, `device, ${name}`);
   }
 });
+
+test("a delete goes through even when the entry's other fields are bad (D58)", async () => {
+  const e = E();
+  await sync(srv, [e], 0);
+  const del = { ...e, recorded_at: "garbage", value: "heavy", updated_at: "2026-11-20T13:00:00Z", deleted_at: "2026-11-20T13:00:00Z" };
+  const r = await sync(srv, [del], 0);
+  assert.deepEqual(r.body.rejected, [], JSON.stringify(r.body.rejected_reasons));
+  assert.ok(find(r.body, e.client_id).deleted_at, "deleted on the server");
+  assert.equal(find(r.body, e.client_id).value, 1, "the server keeps its own good fields");
+
+  // A broken entry that never reached the server: its delete is accepted and does nothing.
+  const ghost = { ...E({ recorded_at: "garbage" }), deleted_at: "2026-11-20T13:00:00Z" };
+  const g = await sync(srv, [ghost], 0);
+  assert.deepEqual(g.body.rejected, []);
+  assert.ok(!find(g.body, ghost.client_id), "nothing stored");
+
+  // An older delete still loses to a newer edit, and gets the winner back.
+  const old = { ...E(), updated_at: "2026-11-20T12:00:00Z" };
+  await sync(srv, [{ ...old, updated_at: "2026-11-20T14:00:00Z" }], 0);
+  const late = await sync(srv, [{ ...old, recorded_at: "garbage", deleted_at: "2026-11-20T13:00:00Z", updated_at: "2026-11-20T13:00:00Z" }], 0);
+  assert.equal(find(late.body, old.client_id).deleted_at, null, "the newer edit wins");
+});
+
+test("a time that overflows is refused alone, not a 500 for the whole batch", async () => {
+  const bad = E({ recorded_at: "0001-01-01T00:00:00+01:00" }), ok = E();
+  const r = await sync(srv, [bad, ok], 0);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.rejected, [bad.client_id]);
+  assert.match(r.body.rejected_reasons[bad.client_id], /recorded_at: bad date/);
+  assert.ok(find(r.body, ok.client_id));
+});

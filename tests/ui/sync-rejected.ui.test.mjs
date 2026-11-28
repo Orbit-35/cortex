@@ -73,28 +73,91 @@ test("a refused entry is remembered with its reason, and fixing it clears the er
   assert.deepEqual((await local(b, bad.client_id))?.data, { fixed: true });
 });
 
-test("a refused delete keeps the entry on the device instead of losing the delete", async () => {
+test("a refused delete is kept; an older version from another device doesn't overwrite it", async () => {
   const a = await device(), b = await device();
   const e = good();
   await a.cortex("putEntries", [e]);
   await a.syncIdle();
   await b.syncIdle();
   const kept = await local(a, e.client_id);
-  // A delete marker carrying a bad field (as a past bug could have written it).
-  await inject(a, { ...kept, recorded_at: "bad", updated_at: new Date(Date.now() + 5).toISOString(), deleted_at: new Date(Date.now() + 5).toISOString() });
+  // A delete the server can't take: its own time is broken (month 13), as a past bug could write.
+  const marker = { ...kept, updated_at: "2026-13-01T00:00:00.000Z", deleted_at: "2026-13-01T00:00:00.000Z" };
+  await inject(a, marker);
   const s = await a.syncIdle();
   assert.equal(s.rejected, 1);
-  assert.ok(await local(a, e.client_id), "the delete marker is kept, not dropped");
+  assert.ok((await local(a, e.client_id)).deleted_at, "the delete marker is kept, not dropped");
   assert.ok(await onServer(e.client_id), "the server still has it");
 
-  // A newer edit from another device replaces the refused one and clears the error.
-  await sleep(10);
+  // Another device's edit is older than the refused delete: it must not replace it silently.
   await b.cortex("putEntries", [{ ...e, data: { from: "b" } }]);
   await b.syncIdle();
   const after = await a.syncIdle();
-  assert.equal(after.rejected, 0, "nothing left to fix");
-  assert.deepEqual((await local(a, e.client_id)).data, { from: "b" });
-  assert.equal((await local(a, e.client_id)).deleted_at, null);
+  assert.equal(after.rejected, 1, "still reported");
+  assert.ok((await local(a, e.client_id)).deleted_at, "the refused delete is still what this device holds");
+  await a.cortex("retryRejected");
+  assert.equal((await a.cortex("getStatus")).rejected, 1, "a retry sends it again and it's refused again, still reported");
+});
+
+test("a newer version from another device clears a refused edit", async () => {
+  const a = await device(), b = await device();
+  const bad = good({ recorded_at: "not-a-date" });
+  await inject(a, bad);
+  assert.equal((await a.syncIdle()).rejected, 1);
+  await sleep(10);
+  await b.cortex("putEntries", [{ ...bad, recorded_at: "2026-11-20T10:00:00.000Z", data: { from: "b" } }]);
+  await b.syncIdle();
+  const s = await a.syncIdle();
+  assert.equal(s.rejected, 0, "nothing left to fix");
+  assert.deepEqual((await local(a, bad.client_id)).data, { from: "b" });
+});
+
+test("deleting a broken entry that never reached the server clears the error", async () => {
+  const page = await device();
+  const bad = good({ recorded_at: "not-a-date" });
+  await inject(page, bad);
+  assert.equal((await page.syncIdle()).rejected, 1);
+  await page.cortex("deleteEntry", bad.client_id);
+  const s = await page.syncIdle();
+  assert.deepEqual([s.pending, s.rejected], [0, 0], "the delete went through");
+  assert.equal(await local(page, bad.client_id), null, "gone from this device");
+});
+
+test("Try again while offline keeps the error and its reason", async () => {
+  const page = await device();
+  const bad = good({ recorded_at: "not-a-date" });
+  await inject(page, bad);
+  await page.syncIdle();
+  await page.waitFor("#sync .syncbad");
+  await page.setOffline(true);
+  await page.click("#sync .syncbad");
+  await page.waitFor(".cx-ask-box");
+  await page.clickText("Try again", ".cx-ask-box button");
+  await page.waitFor(() => /Couldn't reach your PC/.test(document.querySelector(".cx-toast")?.innerText || ""));
+  assert.equal((await page.cortex("getStatus")).rejected, 1, "still counted");
+  assert.match((await page.cortex("listRejected"))[0].reason, /bad date/, "reason kept");
+  assert.equal(await page.text("#sync"), "1 not synced");
+  await page.setOffline(false);
+  assert.equal((await page.syncIdle()).rejected, 1, "refused again once online");
+});
+
+test("Try again after the rules were fixed: the server takes it and the error clears", async () => {
+  const page = await device();
+  // A refusal recorded for an entry the server takes today (as after an update that fixed the rules).
+  const e = good();
+  await page.eval((e) => new Promise((res) => {
+    const req = indexedDB.open("cortex");
+    req.onsuccess = () => {
+      const t = req.result.transaction(["entries", "meta"], "readwrite");
+      t.objectStore("entries").put(e);
+      t.objectStore("meta").put({ [e.client_id]: { reason: "old rule", at: e.updated_at, entry: e } }, "rejected");
+      t.oncomplete = () => { req.result.close(); res(true); };
+    };
+  }), e);
+  assert.equal((await page.cortex("getStatus")).rejected, 1);
+  await page.cortex("retryRejected");
+  const s = await page.syncIdle();
+  assert.deepEqual([s.pending, s.rejected], [0, 0]);
+  assert.ok(await onServer(e.client_id), "now on the server");
 });
 
 test("the same imported row on two devices: the second is refused as a duplicate", async () => {

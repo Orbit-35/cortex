@@ -216,11 +216,34 @@ class SyncEntry(EntryBase):
     def _canonical_time(cls, v: str | None) -> str | None:
         # An empty string is not "no time": a blank updated_at used to be saved as NULL and
         # then broke every later pull (DESIGN D58). Only deleted_at may be absent (None).
-        if v is None:
-            return None
-        if not v.strip():
-            raise ValueError("empty time")
+        return sync_time(v)
+
+
+def sync_time(v: str | None) -> str | None:
+    """A time from a client, made canonical. Blank or unreadable is a ValueError (a refusal),
+    never a crash: '0001-01-01T00:00:00+01:00' overflows to year 0 and used to 500 the
+    whole batch (DESIGN D58)."""
+    if v is None:
+        return None
+    if not v.strip():
+        raise ValueError("empty time")
+    try:
         return to_utc_iso(v)
+    except (ValueError, OverflowError):
+        raise ValueError("bad date") from None
+
+
+class DeleteMarker(BaseModel):
+    """Just enough of an entry to delete it. A delete is accepted even when the entry's other
+    fields are bad, so a broken entry can always be removed (DESIGN D58)."""
+    client_id: str = Field(min_length=8, max_length=64)
+    updated_at: str
+    deleted_at: str
+
+    @field_validator("updated_at", "deleted_at")
+    @classmethod
+    def _canonical_time(cls, v: str) -> str:
+        return sync_time(v)
 
 
 def reject_reason(err: ValidationError) -> str:
@@ -228,8 +251,17 @@ def reject_reason(err: ValidationError) -> str:
     first = err.errors()[0]
     field = ".".join(str(p) for p in first.get("loc", ())) or "entry"
     msg = first.get("msg", "invalid").removeprefix("Value error, ")
-    if "isoformat" in msg.lower() or "invalid isoformat" in msg.lower():
+    kind = first.get("type", "")
+    if "isoformat" in msg.lower():
         msg = "bad date"
+    elif kind.startswith(("float", "int")):
+        msg = "must be a number"
+    elif kind.startswith("string"):
+        msg = "must be text" if kind == "string_type" else msg
+    elif kind.startswith("dict"):
+        msg = "must be an object"
+    elif kind == "missing":
+        msg = "missing"
     return f"{field}: {msg}"
 
 
@@ -270,11 +302,17 @@ def sync(body: SyncIn):
         reasons[cid] = why
 
     valid: list[SyncEntry] = []
+    deletes: list[DeleteMarker] = []
     for raw in body.entries:
         try:
             valid.append(SyncEntry.model_validate(raw))
         except ValidationError as err:
-            refuse(str(raw.get("client_id", "")), reject_reason(err))
+            try:  # a delete of a broken entry still goes through
+                deletes.append(DeleteMarker.model_validate(raw))
+            except ValidationError:
+                refuse(str(raw.get("client_id", "")), reject_reason(err))
+        except Exception as err:  # never let one odd entry fail the whole batch
+            refuse(str(raw.get("client_id", "")), f"invalid entry: {type(err).__name__}")
     losers: list[str] = []  # older edits we ignored: the sender gets our version back
     with write_tx() as conn:
         rev = next_rev(conn)
@@ -312,6 +350,21 @@ def sync(body: SyncIn):
                 dup = "UNIQUE" in str(err)
                 refuse(e.client_id, "duplicate import (this source and external_id already exist)"
                        if dup else f"database refused it: {err}")
+        for d in deletes:
+            existing = conn.execute(
+                "SELECT updated_at FROM entries WHERE client_id = ?", (d.client_id,)
+            ).fetchone()
+            if not existing:
+                continue  # never reached the server: nothing to delete, and nothing to refuse
+            if existing["updated_at"] and d.updated_at <= existing["updated_at"]:
+                if d.updated_at < existing["updated_at"]:
+                    losers.append(d.client_id)
+                continue
+            conn.execute(
+                "UPDATE entries SET updated_at = ?, deleted_at = ?, rev = ? WHERE client_id = ?",
+                (d.updated_at, d.deleted_at, rev, d.client_id),
+            )
+            rev += 1
         cursor = rev - 1
         # A cursor ahead of ours means the server database was replaced: resend everything.
         since = body.since if body.since <= cursor else 0

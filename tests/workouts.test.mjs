@@ -82,6 +82,18 @@ assert.equal(byId.s1.recorded_at, at(11, 18));                // shifted by one 
 d.exercises[1].sets[0].weight = "225";
 assert.equal(commitPlan(d, w).find((e) => e.client_id === "k1").unit, "lb"); // edited: stored as typed
 
+// ---- a set whose stored time can't be read (an old bug) still saves, at the workout's time (D58) ----
+{
+  const broken = [...saved, S("bad1", "squat", 100, 5, "not-a-date", { workout: "w1", set: 1 })];
+  broken[0] = { ...broken[0], data: { ...broken[0].data, exercises: [...broken[0].data.exercises, { key: "squat", notes: "" }] } };
+  const bw = groupWorkouts(broken).find((x) => x.id === "w1");
+  const bd = draftFromWorkout(bw, "kg");
+  const out = commitPlan(bd, bw, new Date(2026, 10, 12));
+  const fixed = out.find((e) => e.client_id === "bad1");
+  assert.equal(fixed.recorded_at, bd.start, "falls back to the workout's start");
+  assert.ok(out.every((e) => !Number.isNaN(Date.parse(e.recorded_at))), "every time is readable");
+}
+
 // ---- past workout: sets take the workout's time ----
 const past = newDraft({ id: "p1", mode: "past", unit: "lb", start: at(3, 12), name: "Workout", duration_min: 75 });
 past.exercises.push({ key: "squat", notes: "", sets: [{ ...blankRow("q1"), weight: "315", reps: "3" }, blankRow("q2")] });

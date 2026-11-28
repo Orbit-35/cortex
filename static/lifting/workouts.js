@@ -142,7 +142,7 @@ export function commitPlan(draft, original, now = new Date()) {
   const nowIso = now.toISOString();
   const origSets = new Map();
   for (const x of original?.exercises || []) for (const s of x.sets) origSets.set(s.client_id, s);
-  const shift = original ? new Date(draft.start) - new Date(original.start) : 0;
+  const shift = original ? (Date.parse(draft.start) - Date.parse(original.start)) || 0 : 0;
   const duration = draft.mode === "live"
     ? Math.max(0, Math.round((now - new Date(draft.start)) / 60000))
     : draft.duration_min ?? null;
@@ -164,7 +164,8 @@ export function commitPlan(draft, original, now = new Date()) {
         client_id: r.id, module: "lifting", metric: ex.key,
         value: untouched ? orig.value : typed,
         unit: untouched ? orig.unit : draft.unit,
-        recorded_at: orig ? new Date(new Date(orig.recorded_at).getTime() + shift).toISOString()
+        // A stored time that can't be read (an old bug) falls back to the workout's start (D58).
+        recorded_at: orig ? new Date((Date.parse(orig.recorded_at) || Date.parse(draft.start) || Date.now()) + shift).toISOString()
           : draft.mode === "live" ? (r.at || nowIso) : draft.start,
         data: { ...(orig?.data || {}), reps: validReps(r.reps), set: i + 1, workout: draft.id, rpe: r.rpe ?? null, type: r.type ?? null },
         deleted_at: null,

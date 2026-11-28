@@ -203,18 +203,20 @@ export async function listRejected() {
 }
 
 // Send every refused entry again (e.g. after an update that fixed the server's rules).
-// An entry edited since it was refused is already queued with its newer version.
+// The records stay until the server accepts them, so a retry while offline loses nothing.
+// An entry edited since it was refused is already queued (or sent) with its newer version.
 export async function retryRejected() {
   await tx(["entries", "outbox", "meta"], "readwrite", (t) => {
-    const meta = t.objectStore("meta"), outbox = t.objectStore("outbox"), entries = t.objectStore("entries");
-    meta.get("rejected").onsuccess = (ev) => {
+    const outbox = t.objectStore("outbox"), entries = t.objectStore("entries");
+    t.objectStore("meta").get("rejected").onsuccess = (ev) => {
       for (const [id, r] of Object.entries(ev.target.result || {})) {
         entries.get(id).onsuccess = (e) => {
           const cur = e.target.result;
-          if (!cur || cur.updated_at === r.entry.updated_at) outbox.put(r.entry);
+          if (cur && cur.updated_at > r.entry.updated_at) return;
+          entries.put(r.entry); // the change the dialog promised is "still on this phone"
+          outbox.put(r.entry);
         };
       }
-      meta.delete("rejected");
     };
   });
   changed();
@@ -307,8 +309,12 @@ async function syncOnce() {
       for (const remote of reply.entries) {
         if (pending.has(remote.client_id)) continue;
         // A newer version from another device replaces a refused edit: nothing left to fix.
+        // An older one must not overwrite it, or the refused change would be lost silently.
         const r = rejected[remote.client_id];
-        if (r && remote.updated_at > r.entry.updated_at) delete rejected[remote.client_id];
+        if (r) {
+          if (remote.updated_at > r.entry.updated_at) delete rejected[remote.client_id];
+          else continue;
+        }
         if (remote.deleted_at) entries.delete(remote.client_id);
         else entries.put(remote);
       }

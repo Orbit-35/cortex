@@ -32,4 +32,10 @@ export const CASES = [
   ["a list for data", { data: ["x"] }, false],
   ["a 7-character id", { client_id: "x".repeat(7) }, false],
   ["a 65-character id", { client_id: "x".repeat(65) }, false],
+  ["a zone on a date only", { recorded_at: "2025-01-01Z" }, false],
+  ["a 25-hour zone", { recorded_at: "2026-11-20T10:00:00+25:00" }, false],
+  ["year 1 pushed into year 0 by its zone", { recorded_at: "0001-01-01T00:00:00+01:00" }, false],
+  ["year 1 in UTC", { recorded_at: "0001-01-01T00:00:00Z" }, true],
+  ["year 9999, last minute", { recorded_at: "9999-12-31T23:59:00Z" }, true],
+  ["a negative zone", { recorded_at: "2026-11-20T10:00:00-07:00" }, true],
 ];
