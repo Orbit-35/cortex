@@ -94,8 +94,13 @@ test("a refused delete is kept; an older version from another device doesn't ove
   const after = await a.syncIdle();
   assert.equal(after.rejected, 1, "still reported");
   assert.ok((await local(a, e.client_id)).deleted_at, "the refused delete is still what this device holds");
+  // Try again gives the broken delete a fresh time: the server takes it and everyone sees it.
   await a.cortex("retryRejected");
-  assert.equal((await a.cortex("getStatus")).rejected, 1, "a retry sends it again and it's refused again, still reported");
+  const fixed = await a.syncIdle();
+  assert.deepEqual([fixed.pending, fixed.rejected], [0, 0], "never stuck as 'not synced'");
+  assert.ok((await onServer(e.client_id)).deleted_at, "deleted on the server");
+  await b.syncIdle();
+  assert.equal(await local(b, e.client_id), null, "and on the other device");
 });
 
 test("a newer version from another device clears a refused edit", async () => {

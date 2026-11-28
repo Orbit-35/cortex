@@ -304,15 +304,18 @@ def sync(body: SyncIn):
     valid: list[SyncEntry] = []
     deletes: list[DeleteMarker] = []
     for raw in body.entries:
+        cid = str(raw.get("client_id", ""))
         try:
             valid.append(SyncEntry.model_validate(raw))
+            continue
         except ValidationError as err:
-            try:  # a delete of a broken entry still goes through
-                deletes.append(DeleteMarker.model_validate(raw))
-            except ValidationError:
-                refuse(str(raw.get("client_id", "")), reject_reason(err))
+            why = reject_reason(err)
         except Exception as err:  # never let one odd entry fail the whole batch
-            refuse(str(raw.get("client_id", "")), f"invalid entry: {type(err).__name__}")
+            why = f"invalid entry: {type(err).__name__}"
+        try:  # a delete of a broken entry still goes through
+            deletes.append(DeleteMarker.model_validate(raw))
+        except Exception:
+            refuse(cid, why)
     losers: list[str] = []  # older edits we ignored: the sender gets our version back
     with write_tx() as conn:
         rev = next_rev(conn)
@@ -345,9 +348,10 @@ def sync(body: SyncIn):
                         fields + (e.client_id, now_iso()),
                     )
                 rev += 1
-            except sqlite3.IntegrityError as err:
+            except sqlite3.Error as err:
                 # Usually UNIQUE(source, external_id): the same imported row under another id.
-                dup = "UNIQUE" in str(err)
+                # Anything else is refused for this entry alone, not a 500 for the batch.
+                dup = isinstance(err, sqlite3.IntegrityError) and "UNIQUE" in str(err)
                 refuse(e.client_id, "duplicate import (this source and external_id already exist)"
                        if dup else f"database refused it: {err}")
         for d in deletes:

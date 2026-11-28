@@ -7,7 +7,7 @@
 // immediately and a copy goes into the outbox; sync() empties the outbox into the
 // cabinet and brings back anything other devices filed since the last visit.
 
-import { checkEntry } from "./check.js";
+import { checkEntry, isIsoTime } from "./check.js";
 
 const DB_NAME = "cortex";
 const DB_VERSION = 1;
@@ -212,9 +212,17 @@ export async function retryRejected() {
       for (const [id, r] of Object.entries(ev.target.result || {})) {
         entries.get(id).onsuccess = (e) => {
           const cur = e.target.result;
-          if (cur && cur.updated_at > r.entry.updated_at) return;
-          entries.put(r.entry); // the change the dialog promised is "still on this phone"
-          outbox.put(r.entry);
+          if (cur && isIsoTime(cur.updated_at) && isIsoTime(r.entry.updated_at) && cur.updated_at > r.entry.updated_at) return;
+          // A refused change whose own time is broken (an old bug) gets a fresh time, so it
+          // can be accepted and wins over older versions. A delete keeps being a delete;
+          // the server takes a delete even when the entry's other fields are bad.
+          let next = r.entry;
+          if (!isIsoTime(next.updated_at) || (next.deleted_at && !isIsoTime(next.deleted_at))) {
+            const now = stamp(null);
+            next = { ...next, updated_at: now, ...(next.deleted_at ? { deleted_at: now } : {}) };
+          }
+          entries.put(next); // the change the dialog promised is "still on this phone"
+          outbox.put(next);
         };
       }
     };

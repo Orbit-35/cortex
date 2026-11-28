@@ -351,8 +351,9 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
   - A time that can't be stored (e.g. year 1 with a zone that pushes it into year 0) is a refusal, never a 500 for the whole batch. Any unexpected error on one entry refuses only that entry. The device check matches (a zone needs a time and is under 24 h; the UTC year must be 1-9999).
   - An **older** version from another device never overwrites a refused local change (only a newer one clears it). `retryRejected` keeps the records until the server accepts, so Try again while offline loses nothing.
   - Editing a workout whose stored set time can't be read saves that set at the workout's start instead of failing with "Invalid time value".
+  - A refused change whose own time is broken (only old or corrupted data; `stamp()` always writes a good one) gets a fresh time on Try again, so even a broken delete can always get through. An unexpected database error on one entry refuses that entry only.
 - **Why:** a refused entry used to vanish from the outbox with only a console warning, and a refused delete was lost for good (plan and findings: `docs/plans/sync-errors.md`).
-- **Trade-off:** the reply only gains a field, so older clients keep working. Reasons are the server's field names ("recorded_at: bad date"): plain enough to report, not polished. A refused delete leaves the device hiding an entry the other devices still show, but now it's reported instead of silent.
+- **Trade-off:** the reply only gains a field, so older clients keep working. Reasons are the server's field names ("recorded_at: bad date"): plain enough to report, not polished. A refused delete leaves the device hiding an entry the other devices still show, but now it's reported instead of silent. With a skewed clock, a refused edit can be "newer" than another device's real edit: this device keeps showing its own version until it's fixed or retried, and the fix then wins over that edit (last write wins, D52). A delete of an entry the server never had leaves no tombstone, so restoring an old server backup could bring it back.
 
 ## Security and hosting
 

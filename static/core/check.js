@@ -3,7 +3,8 @@
 // the other devices, so it's better to refuse it here, where the bug happens. Pure: no DOM,
 // no storage, so it runs in tests and in the native shells unchanged.
 
-// Date, or date and time with an optional zone (a zone needs a time, like Python's).
+// Date, or date and time with an optional zone. A zone needs a time here (Python would also
+// take "2024-01-01+01:00"); stricter than the server is safe, the app never writes that.
 const ISO = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|([+-])(\d{2}):?(\d{2}))?)?$/;
 
 // A date-time the server's datetime.fromisoformat() takes: ISO form, year 1-9999, a real day.
