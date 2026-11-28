@@ -343,6 +343,7 @@ If step 3 or 4 fails (server down, no signal), nothing is lost: the outbox still
 
 ### D58. Sync errors are never silent
 - **Decision (server):** `/api/sync` returns `rejected_reasons` (`client_id` → a short reason such as "recorded_at: bad date" or "duplicate import") next to `rejected`. A blank `recorded_at`, `updated_at` or `deleted_at` is refused: before, a blank `updated_at` was saved as NULL and made every later pull fail with a 500.
+- **Decision (device check):** `static/core/check.js` holds the same rules (`checkEntry`), and `putEntries`/`addEntry` refuse a bad entry before writing anything (a whole `putEntries` batch is all or nothing). Deletes are always allowed, so a bad entry already on a device can still be removed. One case list (`tests/lib/entry-cases.mjs`) runs against both the server and the device check, so the rules can't drift apart. Pure and DOM-free like the rest of `core/` (D13). If Lifting's one-off grouping of old sets (D26) is refused, the app logs it and draws anyway.
 - **Why:** a refused entry used to vanish from the outbox with only a console warning, and a refused delete was lost for good (plan and findings: `docs/plans/sync-errors.md`).
 - **Trade-off:** none so far; the reply shape only gains a field, so older clients keep working.
 

@@ -1210,6 +1210,7 @@ async function showSync() {
   else { el.textContent = online === false ? "offline" : ""; el.className = "sync"; }
 }
 
+let migrationFailed = false; // tried once this page load and refused: don't retry on every refresh
 let migrating = false;
 async function refresh() {
   entries = await cortex.listEntries({ module: "lifting", limit: Infinity });
@@ -1218,10 +1219,16 @@ async function refresh() {
 
   // Sets from before workouts existed get grouped into one workout per day (DESIGN D26).
   const plan = legacyPlan(entries);
-  if (plan.length && !migrating) {
+  if (plan.length && !migrating && !migrationFailed) {
     migrating = true;
-    try { await cortex.putEntries(plan); } finally { migrating = false; }
-    return; // putEntries triggers another refresh
+    try {
+      await cortex.putEntries(plan);
+      return; // putEntries triggers another refresh
+    } catch (err) {
+      // An old entry the device check refuses (D58) must not stop the app from drawing.
+      migrationFailed = true;
+      console.warn("Grouping old sets into workouts failed:", err);
+    } finally { migrating = false; }
   }
   sets = entries.filter(isSet);
   workSets = sets.filter(isWorking);

@@ -135,3 +135,16 @@ test("a duplicate import is refused with its reason", async () => {
   assert.deepEqual(r.body.rejected, [again.client_id]);
   assert.match(r.body.rejected_reasons[again.client_id], /duplicate import/);
 });
+
+test("the server and the device's own check agree on every case (D58)", async () => {
+  const { base, CASES } = await import("../lib/entry-cases.mjs");
+  const { checkEntry } = await import("../../static/core/check.js");
+  for (const [name, over, ok] of CASES) {
+    const e = { ...base(), client_id: id("case"), ...over };
+    const r = await sync(srv, [e], 0);
+    assert.equal(r.status, 200, name);
+    const refused = r.body.rejected.includes(e.client_id);
+    assert.equal(!refused, ok, `server, ${name}: ${r.body.rejected_reasons[e.client_id] ?? "accepted"}`);
+    assert.equal(checkEntry(e) === null, ok, `device, ${name}`);
+  }
+});

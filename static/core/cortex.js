@@ -7,6 +7,8 @@
 // immediately and a copy goes into the outbox; sync() empties the outbox into the
 // cabinet and brings back anything other devices filed since the last visit.
 
+import { checkEntry } from "./check.js";
+
 const DB_NAME = "cortex";
 const DB_VERSION = 1;
 const SYNC_TIMEOUT_MS = 10000;
@@ -97,8 +99,18 @@ const stamp = (prev) => {
 
 // ---------- Writes: local first, then outbox ----------
 
+// Refuse an entry the server would refuse (DESIGN D58), before anything is written, so the
+// bug shows up here instead of as a silent sync failure later. A delete is always allowed,
+// so even a bad entry that already exists on this device can be removed.
+function assertValid(e) {
+  if (e.deleted_at) return;
+  const why = checkEntry(e);
+  if (why) throw new Error(`can't save this entry (${why})`);
+}
+
 // Save locally and queue for the server in one transaction: either both happen or neither.
 async function saveLocal(entry) {
+  assertValid(entry);
   await tx(["entries", "outbox"], "readwrite", (t) => {
     t.objectStore("entries").put(entry);
     t.objectStore("outbox").put(entry);
@@ -129,6 +141,7 @@ export async function putEntries(list) {
     external_id: e.external_id ?? null, deleted_at: e.deleted_at ?? null, updated_at: stamp(e.updated_at),
   }));
   if (!rows.length) return rows;
+  rows.forEach(assertValid); // all or nothing: one bad row refuses the whole save
   await tx(["entries", "outbox"], "readwrite", (t) => {
     for (const r of rows) {
       t.objectStore("entries").put(r);

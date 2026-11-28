@@ -24,6 +24,7 @@ const SHELL = [
   "/lifting/workouts.js",
   "/lifting/progress.js",
   "/core/cortex.js",
+  "/core/check.js",
   "/core/ui.js",
   "/core/chart.js",
   "/core/icons.js",
